@@ -1371,23 +1371,22 @@ def cliente_delete(request, cliente_id: int):
     return render(request, "billing/cliente_confirm_delete.html", {"cliente": cliente})
 
 
-@login_required
-def boletos_list(request):
-    boletos = Boleto.objects.select_related("cliente")
 
+
+
+
+def _aplicar_filtros_boletos(request, queryset, *, incluir_status=True):
+    """Aplica filtros compartilhados e retorna o queryset filtrado mais o contexto."""
     hoje = timezone.localdate()
     mes_param_raw = request.GET.get("mes") if "mes" in request.GET else str(hoje.month)
     ano_param_raw = request.GET.get("ano") if "ano" in request.GET else str(hoje.year)
 
     mes_param = (mes_param_raw or "").strip()
     ano_param = (ano_param_raw or "").strip()
-    if "status" in request.GET:
-        status_param_raw = request.GET.get("status", "")
-    else:
-        status_param_raw = Boleto.STATUS_EMITIDO
-    status_param = (status_param_raw or "").strip()
     dia_param = request.GET.get("dia", "").strip()
     nome_param = request.GET.get("nome", "").strip()
+
+    boletos_filtrados = queryset
 
     mes_selecionado = ""
     if mes_param:
@@ -1396,7 +1395,7 @@ def boletos_list(request):
         except ValueError:
             mes_valor = None
         if mes_valor and 1 <= mes_valor <= 12:
-            boletos = boletos.filter(competencia_mes=mes_valor)
+            boletos_filtrados = boletos_filtrados.filter(competencia_mes=mes_valor)
             mes_selecionado = str(mes_valor)
 
     ano_selecionado = ""
@@ -1406,31 +1405,41 @@ def boletos_list(request):
         except ValueError:
             ano_valor = None
         if ano_valor:
-            boletos = boletos.filter(competencia_ano=ano_valor)
+            boletos_filtrados = boletos_filtrados.filter(competencia_ano=ano_valor)
             ano_selecionado = str(ano_valor)
 
-    status_choices_map = dict(Boleto.STATUS_CHOICES)
-    status_choices_visiveis = sorted(
-        [
-            (value, label)
-            for value, label in Boleto.STATUS_CHOICES
-            if value != "novo"
-        ],
-        key=lambda item: item[1],
-    )
-    status_opcoes = [{"value": "", "label": "Todos"}] + [
-        {"value": value, "label": label} for value, label in status_choices_visiveis
-    ]
-    status_opcoes.append({"value": "pago_pix", "label": "Pago (PIX)"})
-    status_choices_map["pago_pix"] = "Pago (PIX)"
-
+    status_opcoes: List[Dict[str, str]] = []
     status_selecionado = ""
-    if status_param == "pago_pix":
-        boletos = boletos.filter(status=Boleto.STATUS_PAGO, forma_pagamento="pix")
-        status_selecionado = status_param
-    elif status_param and status_param in status_choices_map:
-        boletos = boletos.filter(status=status_param)
-        status_selecionado = status_param
+    if incluir_status:
+        if "status" in request.GET:
+            status_param_raw = request.GET.get("status", "")
+        else:
+            status_param_raw = Boleto.STATUS_EMITIDO
+        status_param = (status_param_raw or "").strip()
+
+        status_choices_map = dict(Boleto.STATUS_CHOICES)
+        status_choices_visiveis = sorted(
+            [
+                (value, label)
+                for value, label in Boleto.STATUS_CHOICES
+                if value != "novo"
+            ],
+            key=lambda item: item[1],
+        )
+        status_opcoes = [{"value": "", "label": "Todos"}] + [
+            {"value": value, "label": label} for value, label in status_choices_visiveis
+        ]
+        status_opcoes.append({"value": "pago_pix", "label": "Pago (PIX)"})
+        status_choices_map["pago_pix"] = "Pago (PIX)"
+
+        if status_param == "pago_pix":
+            boletos_filtrados = boletos_filtrados.filter(status=Boleto.STATUS_PAGO, forma_pagamento="pix")
+            status_selecionado = status_param
+        elif status_param and status_param in status_choices_map:
+            boletos_filtrados = boletos_filtrados.filter(status=status_param)
+            status_selecionado = status_param
+    else:
+        status_selecionado = (request.GET.get("status", "") or "").strip()
 
     dia_selecionado = ""
     if dia_param:
@@ -1439,12 +1448,12 @@ def boletos_list(request):
         except ValueError:
             dia_valor = None
         if dia_valor and 1 <= dia_valor <= 31:
-            boletos = boletos.filter(data_vencimento__day=dia_valor)
+            boletos_filtrados = boletos_filtrados.filter(data_vencimento__day=dia_valor)
             dia_selecionado = str(dia_valor)
 
     nome_selecionado = ""
     if nome_param:
-        boletos = boletos.filter(cliente__nome__icontains=nome_param)
+        boletos_filtrados = boletos_filtrados.filter(cliente__nome__icontains=nome_param)
         nome_selecionado = nome_param
 
     anos_disponiveis = list(
@@ -1470,10 +1479,7 @@ def boletos_list(request):
         if dia is not None
     ]
 
-    boletos = boletos.order_by("cliente__nome", "-criado_em")
-
-    context = {
-        "boletos": boletos,
+    contexto_filtros = {
         "meses": meses_contexto,
         "anos": [str(ano) for ano in anos_disponiveis],
         "dias": dias_contexto,
@@ -1483,6 +1489,20 @@ def boletos_list(request):
         "status_opcoes": status_opcoes,
         "status_selecionado": status_selecionado,
         "nome_selecionado": nome_selecionado,
+    }
+
+    return boletos_filtrados, contexto_filtros
+
+
+@login_required
+def boletos_list(request):
+    boletos_queryset = Boleto.objects.select_related("cliente")
+    boletos_filtrados, contexto_filtros = _aplicar_filtros_boletos(request, boletos_queryset)
+    boletos = boletos_filtrados.order_by("cliente__nome", "-criado_em")
+
+    context = {
+        "boletos": boletos,
+        **contexto_filtros,
     }
     return render(request, "billing/boletos_list.html", context)
 
@@ -1755,11 +1775,31 @@ def enviar_boletos_whatsapp(request):
     config = WhatsappConfig.get_solo()
     mensagem_form = WhatsappMensagemForm(instance=config)
 
-    boletos_queryset = (
-        Boleto.objects.filter(status=Boleto.STATUS_EMITIDO)
-        .select_related("cliente")
-        .order_by("data_vencimento", "id")
+
+    boletos_queryset = Boleto.objects.select_related("cliente")
+    boletos_filtrados, contexto_filtros = _aplicar_filtros_boletos(
+        request,
+        boletos_queryset,
+        incluir_status=False,
     )
+    boletos_filtrados = boletos_filtrados.filter(status=Boleto.STATUS_EMITIDO)
+    status_envio_opcoes = [
+        {"value": "", "label": "Todos"},
+        {"value": "enviado", "label": "Enviado"},
+        {"value": "a_enviar", "label": "A enviar"},
+        {"value": "erro", "label": "Erro"},
+    ]
+    status_envio_param = (request.GET.get("status", "") or "").strip().lower()
+    valores_status_validos = {op["value"] for op in status_envio_opcoes if op["value"]}
+    if status_envio_param and status_envio_param not in valores_status_validos:
+        status_envio_param = ""
+    contexto_filtros.update(
+        {
+            "status_opcoes": status_envio_opcoes,
+            "status_selecionado": status_envio_param,
+        }
+    )
+    boletos_queryset = boletos_filtrados.order_by("data_vencimento", "id")
     boletos = list(boletos_queryset)
 
     session_status_map = dict(request.session.get("boletos_envio_status", {}))
@@ -1787,6 +1827,15 @@ def enviar_boletos_whatsapp(request):
             elif isinstance(payload, str):
                 return payload
         return ""
+
+    def _status_envio_slug(label: Optional[str]) -> str:
+        texto = (label or "").strip().lower()
+        if "erro" in texto:
+            return "erro"
+        if "enviado" in texto:
+            return "enviado"
+        return "a_enviar"
+
 
     resultados: List[Dict[str, Any]] = []
     alvo_ids_raw = request.POST.getlist("boleto_id") if request.method == "POST" else []
@@ -1878,41 +1927,45 @@ def enviar_boletos_whatsapp(request):
                 status_label = "A enviar"
         status_map[boleto.id] = status_label
 
-    tabela_boletos: List[Dict[str, Any]] = []
+    linhas_boletos: List[Tuple[Dict[str, Any], str]] = []
     for boleto in boletos:
-        if boleto.status != Boleto.STATUS_EMITIDO:
-            continue
         cliente = boleto.cliente
         telefone_whatsapp = format_whatsapp_phone(cliente)
         telefone_display = telefone_whatsapp.split("@")[0] if telefone_whatsapp else ""
         bloqueios: List[str] = []
+        if boleto.status != Boleto.STATUS_EMITIDO:
+            descricao_status = boleto.get_status_display()
+            bloqueios.append(f"Status atual impede envio: {descricao_status}.")
         pdf_disponivel = _pdf_existe_localmente(boleto)
         if not telefone_whatsapp:
             bloqueios.append("Telefone do cliente invalido ou ausente.")
         if not pdf_disponivel:
-            bloqueios.append("PDF do boleto ainda nÃ£o foi baixado.")
-        tabela_boletos.append(
-            {
-                "id": boleto.id,
-                "cliente": cliente.nome,
-                "competencia": f"{boleto.competencia_mes:02d}/{boleto.competencia_ano}",
-                "valor": boleto.valor,
-                "vencimento": boleto.data_vencimento,
-                "telefone": telefone_display,
-                "telefone_whatsapp": telefone_whatsapp,
-                "telefone_bruto": f"{cliente.ddd or ''}{cliente.telefone or ''}",
-                "codigo_barras": boleto.codigo_barras or boleto.linha_digitavel or "",
-                "pdf_url": boleto.pdf.url if pdf_disponivel else "",
-                "pdf_disponivel": pdf_disponivel,
-                "status_envio": status_map.get(boleto.id, "A enviar"),
-                "pode_enviar": not bloqueios,
-                "bloqueios": bloqueios,
-                "detalhe_envio": session_detail_map.get(
-                    str(boleto.id),
-                    boleto.whatsapp_status_detail or "",
-                ),
-            }
-        )
+            bloqueios.append("PDF do boleto ainda nao foi baixado.")
+        status_envio_label = status_map.get(boleto.id, "A enviar")
+        status_envio_slug = _status_envio_slug(status_envio_label)
+        linha = {
+            "id": boleto.id,
+            "cliente": cliente.nome,
+            "competencia": f"{boleto.competencia_mes:02d}/{boleto.competencia_ano}",
+            "valor": boleto.valor,
+            "vencimento": boleto.data_vencimento,
+            "telefone": telefone_display,
+            "telefone_whatsapp": telefone_whatsapp,
+            "telefone_bruto": f"{cliente.ddd or ''}{cliente.telefone or ''}",
+            "codigo_barras": boleto.codigo_barras or boleto.linha_digitavel or "",
+            "pdf_url": boleto.pdf.url if pdf_disponivel else "",
+            "pdf_disponivel": pdf_disponivel,
+            "status_envio": status_envio_label,
+            "pode_enviar": not bloqueios,
+            "bloqueios": bloqueios,
+            "detalhe_envio": session_detail_map.get(
+                str(boleto.id),
+                boleto.whatsapp_status_detail or "",
+            ),
+        }
+        linhas_boletos.append((linha, status_envio_slug))
+
+    tabela_boletos = [linha for linha, slug in linhas_boletos if not status_envio_param or slug == status_envio_param]
 
     total = len(tabela_boletos)
     enviados = sum(1 for item in tabela_boletos if item["status_envio"] == "Enviado")
@@ -1920,6 +1973,7 @@ def enviar_boletos_whatsapp(request):
     pendentes = total - enviados - erros
 
     context = {
+        **contexto_filtros,
         "boletos": tabela_boletos,
         "total": total,
         "total_enviados": enviados,
