@@ -174,7 +174,7 @@ def _pdf_existe_localmente(boleto: Boleto) -> bool:
 
 def _preparar_boleto_para_reemissao(boleto: Boleto) -> None:
     """
-    Limpa dados sensíveis de um boleto cancelado para permitir nova emissão.
+    Limpa dados sensÃ­veis de um boleto cancelado para permitir nova emissÃ£o.
     """
     if boleto.pdf:
         try:
@@ -236,7 +236,7 @@ def _buscar_pdf_bytes(inter: InterService, boleto: Boleto) -> Optional[bytes]:
             with boleto.pdf.open("rb") as stream:
                 return stream.read()
         except FileNotFoundError:
-            # Arquivo foi removido do disco; força re-download via API.
+            # Arquivo foi removido do disco; forÃ§a re-download via API.
             pass
 
     identificadores = [
@@ -426,7 +426,11 @@ def clientes_list(request):
     dia_param = request.GET.get("dia_vencimento", "").strip()
     valor_min_param = request.GET.get("valor_min", "").strip()
     valor_max_param = request.GET.get("valor_max", "").strip()
-    status_param = request.GET.get("status", "").strip().lower()
+    if "status" in request.GET:
+        status_param_raw = request.GET.get("status", "")
+    else:
+        status_param_raw = Boleto.STATUS_EMITIDO
+    status_param = (status_param_raw or "").strip().lower()
 
     if nome_param:
         clientes_qs = clientes_qs.filter(nome__icontains=nome_param)
@@ -1156,13 +1160,13 @@ def cliente_import(request):
         except InvalidFileException:
             form.add_error("arquivo", "O arquivo deve estar em formato Excel (.xlsx).")
         except Exception as exc:
-            form.add_error("arquivo", f"Não foi possível ler a planilha: {exc}")
+            form.add_error("arquivo", f"NÃ£o foi possÃ­vel ler a planilha: {exc}")
         else:
             try:
                 sheet = workbook.active
                 header_row = next(sheet.iter_rows(max_row=1, values_only=True), None)
                 if not header_row:
-                    form.add_error("arquivo", "A planilha precisa ter uma linha de cabeçalho.")
+                    form.add_error("arquivo", "A planilha precisa ter uma linha de cabeÃ§alho.")
                 else:
                     header_map: Dict[str, int] = {}
                     for idx, header in enumerate(header_row):
@@ -1173,7 +1177,7 @@ def cliente_import(request):
                     campos_faltando = [campo for campo in CLIENTE_IMPORT_REQUIRED if campo not in header_map]
                     if campos_faltando:
                         cabecalhos = ", ".join(sorted(campos_faltando))
-                        form.add_error("arquivo", f"Cabeçalhos obrigatórios ausentes: {cabecalhos}.")
+                        form.add_error("arquivo", f"CabeÃ§alhos obrigatÃ³rios ausentes: {cabecalhos}.")
                     else:
                         criados = atualizados = 0
                         erros: List[str] = []
@@ -1199,10 +1203,10 @@ def cliente_import(request):
                             try:
                                 nome = _texto_limpo(dados.get("nome"))
                                 if not nome:
-                                    raise ValueError("Nome não informado.")
+                                    raise ValueError("Nome nÃ£o informado.")
                                 cpf = _apenas_digitos(_texto_limpo(dados.get("cpfCnpj")))
                                 if not cpf:
-                                    raise ValueError("CPF/CNPJ não informado.")
+                                    raise ValueError("CPF/CNPJ nÃ£o informado.")
                                 valor_nominal = _parse_decimal(dados.get("valorNominal"))
                                 dia_venc = _parse_dia_vencimento(dados.get("dataVencimento"))
                             except (ValueError, InvalidOperation) as exc:
@@ -1244,7 +1248,7 @@ def cliente_import(request):
                             resumo = ", ".join(mensagens)
                             messages.success(
                                 request,
-                                f"Importação concluída com sucesso: {resumo}.",
+                                f"ImportaÃ§Ã£o concluÃ­da com sucesso: {resumo}.",
                             )
                         else:
                             messages.info(
@@ -1311,7 +1315,7 @@ def cliente_import_template(request):
     )
     ws.append(
         [
-            "Cliente Pessoa Física",
+            "Cliente Pessoa FÃ­sica",
             "123.456.789-00",
             89.5,
             25,
@@ -1377,7 +1381,11 @@ def boletos_list(request):
 
     mes_param = (mes_param_raw or "").strip()
     ano_param = (ano_param_raw or "").strip()
-    status_param = request.GET.get("status", "").strip()
+    if "status" in request.GET:
+        status_param_raw = request.GET.get("status", "")
+    else:
+        status_param_raw = Boleto.STATUS_EMITIDO
+    status_param = (status_param_raw or "").strip()
     dia_param = request.GET.get("dia", "").strip()
     nome_param = request.GET.get("nome", "").strip()
 
@@ -1533,12 +1541,12 @@ def gerar_boletos(request):
 
         with transaction.atomic():
             for cli in clientes:
-                # Calcula data de vencimento (ajustando para ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºltimo dia do mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs, se necessÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio)
+                # Calcula data de vencimento (ajustando para ÃƒÂƒÃ†Â’ÃƒÂ†Ã¢Â€Â™ÃƒÂƒÃ¢Â€ÂšÃƒÂ‚Ã‚Âºltimo dia do mÃƒÂƒÃ†Â’ÃƒÂ†Ã¢Â€Â™ÃƒÂƒÃ¢Â€ÂšÃƒÂ‚Ã‚Âªs, se necessÃƒÂƒÃ†Â’ÃƒÂ†Ã¢Â€Â™ÃƒÂƒÃ¢Â€ÂšÃƒÂ‚Ã‚Â¡rio)
                 last_day = calendar.monthrange(ano, mes)[1]
                 dia = min(cli.dataVencimento, last_day)
                 data_venc = dt.date(ano, mes, dia)
 
-                # Evita duplicidade da mesma competÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia
+                # Evita duplicidade da mesma competÃƒÂƒÃ†Â’ÃƒÂ†Ã¢Â€Â™ÃƒÂƒÃ¢Â€ÂšÃƒÂ‚Ã‚Âªncia
                 boleto, created = Boleto.objects.get_or_create(
                     cliente=cli, competencia_ano=ano, competencia_mes=mes,
                     defaults={
@@ -1552,10 +1560,10 @@ def gerar_boletos(request):
                         boleto.data_vencimento = data_venc
                         boleto.valor = cli.valorNominal
                     else:
-                        messages.info(request, f"Boleto já existia: {cli.nome} {mes:02d}/{ano}")
+                        messages.info(request, f"Boleto jÃ¡ existia: {cli.nome} {mes:02d}/{ano}")
                         continue
 
-                # Monta dict no formato esperado pelo serviÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§o (Banco Inter)
+                # Monta dict no formato esperado pelo serviÃƒÂƒÃ†Â’ÃƒÂ†Ã¢Â€Â™ÃƒÂƒÃ¢Â€ÂšÃƒÂ‚Ã‚Â§o (Banco Inter)
                 cli_dict = {
                     "valorNominal": float(cli.valorNominal),
                     "nome": cli.nome,
@@ -1722,7 +1730,7 @@ def cancelar_boleto(request, boleto_id: int):
             codigo_solicitacao=boleto.codigo_solicitacao or "",
             nosso_numero=boleto.nosso_numero or "",
         )
-    except Exception as exc:  # noqa: BLE001 - queremos exibir o motivo ao usuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio
+    except Exception as exc:  # noqa: BLE001 - queremos exibir o motivo ao usuÃƒÂƒÃ†Â’ÃƒÂ†Ã¢Â€Â™ÃƒÂƒÃ¢Â€ÂšÃƒÂ‚Ã‚Â¡rio
         boleto.erro_msg = str(exc)
         boleto.save(update_fields=["erro_msg"])
         messages.error(request, f"Falha ao cancelar via API: {exc}")
@@ -1734,10 +1742,10 @@ def cancelar_boleto(request, boleto_id: int):
         if situacao:
             messages.success(
                 request,
-                f"CobranÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a cancelada. SituaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o informada pelo Inter: {situacao}",
+                f"Cobran\u00e7a cancelada. Situa\u00e7\u00e3o informada pelo Inter: {situacao}",
             )
         else:
-            messages.success(request, "CobranÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a cancelada com sucesso no Inter.")
+            messages.success(request, "Cobran\u00e7a cancelada com sucesso no Inter.")
     return redirect("boletos_list")
 
 
@@ -1882,7 +1890,7 @@ def enviar_boletos_whatsapp(request):
         if not telefone_whatsapp:
             bloqueios.append("Telefone do cliente invalido ou ausente.")
         if not pdf_disponivel:
-            bloqueios.append("PDF do boleto ainda não foi baixado.")
+            bloqueios.append("PDF do boleto ainda nÃ£o foi baixado.")
         tabela_boletos.append(
             {
                 "id": boleto.id,
