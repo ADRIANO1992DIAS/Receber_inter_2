@@ -1,0 +1,59 @@
+﻿services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./config/inter/.env
+    environment:
+      EVOLUTION_BASE_URL: ${EVOLUTION_BASE_URL:-http://evolution-api:8080}
+    volumes:
+      - ./data:/app/data
+      - ./media:/app/media
+      - ./static:/app/static
+      - ./staticfiles:/app/staticfiles
+    depends_on:
+      - evolution-api
+    restart: unless-stopped
+
+  evolution-api:
+    image: evoapicloud/evolution-api:latest
+    container_name: evolution_api
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./evolution/.env
+    volumes:
+      - evolution_instances:/evolution/instances
+    depends_on:
+      - evolution-postgres
+      - evolution-redis
+    restart: always
+
+  evolution-postgres:
+    image: postgres:15
+    container_name: evolution_postgres
+    command: ["postgres", "-c", "max_connections=1000"]
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - evolution_postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  evolution-redis:
+    image: redis:latest
+    container_name: evolution_redis
+    command: >
+      redis-server --port 6379 --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - evolution_redis_data:/data
+    restart: always
+
+volumes:
+  evolution_instances:
+  evolution_postgres_data:
+  evolution_redis_data:

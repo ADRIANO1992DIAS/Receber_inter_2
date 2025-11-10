@@ -1,0 +1,15 @@
+﻿
+/config/inter/.env
+/config/inter/Inter_API_Certificado.crt
+/config/inter/Inter_API_Chave.key
+/media
+/Envia_boleto
+/evolution/.env
+
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+/data/
+/staticfiles/
