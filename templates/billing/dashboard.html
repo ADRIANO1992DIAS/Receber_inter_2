@@ -85,104 +85,116 @@
     </form>
 
     <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-      <div class="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-brand-50 via-white to-white p-6 shadow-sm">
-        <div class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-brand-100/60"></div>
-        <div class="relative flex items-center gap-4">
-          <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600/90 text-white shadow-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7l8.89 5.26a2 2 0 002.11 0L23 7M5 19h14a2 2 0 002-2V7a2 2 0 00-1-1.73l-8-4.44a2 2 0 00-2 0l-8 4.44A2 2 0 003 7v10a2 2 0 002 2z" />
-            </svg>
-          </span>
-          <div>
-            <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Boletos gerados</p>
-            <p class="text-3xl font-semibold text-slate-900">R$ {{ valor_gerado|currency_br }}</p>
-            <p class="text-xs font-medium text-slate-500">{{ total_gerados|intcomma }} boleto(s)</p>
+      <a href="{% url 'boletos_list' %}?status={% for mes in meses_selecionados %}&mes={{ mes }}{% endfor %}{% for ano in anos_selecionados %}&ano={{ ano }}{% endfor %}{% for dia in dias_selecionados %}&dia={{ dia }}{% endfor %}" class="block rounded-3xl transition duration-150 ease-in-out hover:scale-[1.02] hover:shadow-xl focus:scale-[1.02] focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2">
+        <div class="relative h-full overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-brand-50 via-white to-white p-6 shadow-sm">
+          <div class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-brand-100/60"></div>
+          <div class="relative flex items-center gap-4">
+            <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600/90 text-white shadow-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7l8.89 5.26a2 2 0 002.11 0L23 7M5 19h14a2 2 0 002-2V7a2 2 0 00-1-1.73l-8-4.44a2 2 0 00-2 0l-8 4.44A2 2 0 003 7v10a2 2 0 002 2z" />
+              </svg>
+            </span>
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Boletos gerados</p>
+              <p class="text-3xl font-semibold text-slate-900">R$ {{ valor_gerado|currency_br }}</p>
+              <p class="text-xs font-medium text-slate-500">{{ total_gerados|intcomma }} boleto(s)</p>
+            </div>
           </div>
         </div>
-      </div>
+      </a>
 
-      <div class="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-emerald-50 via-white to-white p-6 shadow-sm">
-        <div class="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-emerald-100/60"></div>
-        <div class="relative flex items-center gap-4">
-          <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </span>
-          <div>
-            <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Boletos recebidos</p>
-            <p class="text-3xl font-semibold text-slate-900">R$ {{ valor_recebido|currency_br }}</p>
-            <p class="text-xs font-medium text-slate-500">{{ total_recebidos|intcomma }} boleto(s)</p>
+      <a href="{% url 'boletos_list' %}?status=pago{% for mes in meses_selecionados %}&mes={{ mes }}{% endfor %}{% for ano in anos_selecionados %}&ano={{ ano }}{% endfor %}{% for dia in dias_selecionados %}&dia={{ dia }}{% endfor %}" class="block rounded-3xl transition duration-150 ease-in-out hover:scale-[1.02] hover:shadow-xl focus:scale-[1.02] focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2">
+        <div class="relative h-full overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-emerald-50 via-white to-white p-6 shadow-sm">
+          <div class="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-emerald-100/60"></div>
+          <div class="relative flex items-center gap-4">
+            <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </span>
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Boletos recebidos</p>
+              <p class="text-3xl font-semibold text-slate-900">R$ {{ valor_recebido|currency_br }}</p>
+              <p class="text-xs font-medium text-slate-500">{{ total_recebidos|intcomma }} boleto(s)</p>
+            </div>
           </div>
         </div>
-      </div>
+      </a>
 
-      <div class="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-sky-50 via-white to-white p-6 shadow-sm">
-        <div class="absolute -right-14 -top-14 h-36 w-36 rounded-full bg-sky-100/60"></div>
-        <div class="relative flex items-center gap-4">
-          <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500 text-white shadow-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h2m3 0h2m3 0h2M5 7l.553-1.106A2 2 0 017.382 5h9.236a2 2 0 011.829 1.106L19 7" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 7h14v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7z" />
-            </svg>
-          </span>
-          <div>
-            <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">PIX/Dinheiro</p>
-            <p class="text-3xl font-semibold text-slate-900">R$ {{ valor_pix_dinheiro|currency_br }}</p>
-            <p class="text-xs font-medium text-slate-500">{{ total_pix_dinheiro|intcomma }} boleto(s)</p>
+      <a href="{% url 'boletos_list' %}?status=pago_pix{% for mes in meses_selecionados %}&mes={{ mes }}{% endfor %}{% for ano in anos_selecionados %}&ano={{ ano }}{% endfor %}{% for dia in dias_selecionados %}&dia={{ dia }}{% endfor %}" class="block rounded-3xl transition duration-150 ease-in-out hover:scale-[1.02] hover:shadow-xl focus:scale-[1.02] focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2">
+        <div class="relative h-full overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-sky-50 via-white to-white p-6 shadow-sm">
+          <div class="absolute -right-14 -top-14 h-36 w-36 rounded-full bg-sky-100/60"></div>
+          <div class="relative flex items-center gap-4">
+            <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500 text-white shadow-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h2m3 0h2m3 0h2M5 7l.553-1.106A2 2 0 017.382 5h9.236a2 2 0 011.829 1.106L19 7" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 7h14v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7z" />
+              </svg>
+            </span>
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">PIX/Dinheiro</p>
+              <p class="text-3xl font-semibold text-slate-900">R$ {{ valor_pix_dinheiro|currency_br }}</p>
+              <p class="text-xs font-medium text-slate-500">{{ total_pix_dinheiro|intcomma }} boleto(s)</p>
+            </div>
           </div>
         </div>
-      </div>
+      </a>
 
-      <div class="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-rose-50 via-white to-white p-6 shadow-sm">
-        <div class="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-rose-100/60"></div>
-        <div class="relative flex items-center gap-4">
-          <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500 text-white shadow-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v4m0 4h.01M4.93 4.93l14.14 14.14M21 21L3 3" />
-            </svg>
-          </span>
-          <div>
-            <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Boletos cancelados</p>
-            <p class="text-3xl font-semibold text-slate-900">R$ {{ valor_cancelado|currency_br }}</p>
-            <p class="text-xs font-medium text-slate-500">{{ total_cancelados|intcomma }} boleto(s)</p>
+      <a href="{% url 'boletos_list' %}?status=cancelado{% for mes in meses_selecionados %}&mes={{ mes }}{% endfor %}{% for ano in anos_selecionados %}&ano={{ ano }}{% endfor %}{% for dia in dias_selecionados %}&dia={{ dia }}{% endfor %}" class="block rounded-3xl transition duration-150 ease-in-out hover:scale-[1.02] hover:shadow-xl focus:scale-[1.02] focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2">
+        <div class="relative h-full overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-rose-50 via-white to-white p-6 shadow-sm">
+          <div class="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-rose-100/60"></div>
+          <div class="relative flex items-center gap-4">
+            <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500 text-white shadow-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v4m0 4h.01M4.93 4.93l14.14 14.14M21 21L3 3" />
+              </svg>
+            </span>
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Boletos cancelados</p>
+              <p class="text-3xl font-semibold text-slate-900">R$ {{ valor_cancelado|currency_br }}</p>
+              <p class="text-xs font-medium text-slate-500">{{ total_cancelados|intcomma }} boleto(s)</p>
+            </div>
           </div>
         </div>
-      </div>
+      </a>
 
-      <div class="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-amber-50 via-white to-white p-6 shadow-sm">
-        <div class="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-amber-100/60"></div>
-        <div class="relative flex items-center gap-4">
-          <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-9.33-4.987" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17H4l1.405-1.405A2.032 2.032 0 006 14.158V11c0-1.657 1.343-3 3-3s3 1.343 3 3v3.159c0 .538.214 1.055.595 1.436L15 17" />
-            </svg>
-          </span>
-          <div>
-            <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Boletos em atraso</p>
-            <p class="text-3xl font-semibold text-slate-900">R$ {{ valor_em_atraso|currency_br }}</p>
-            <p class="text-xs font-medium text-slate-500">{{ total_em_atraso|intcomma }} boleto(s)</p>
+      <a href="{% url 'boletos_list' %}?status=atrasado{% for mes in meses_selecionados %}&mes={{ mes }}{% endfor %}{% for ano in anos_selecionados %}&ano={{ ano }}{% endfor %}{% for dia in dias_selecionados %}&dia={{ dia }}{% endfor %}" class="block rounded-3xl transition duration-150 ease-in-out hover:scale-[1.02] hover:shadow-xl focus:scale-[1.02] focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2">
+        <div class="relative h-full overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-amber-50 via-white to-white p-6 shadow-sm">
+          <div class="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-amber-100/60"></div>
+          <div class="relative flex items-center gap-4">
+            <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-9.33-4.987" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17H4l1.405-1.405A2.032 2.032 0 006 14.158V11c0-1.657 1.343-3 3-3s3 1.343 3 3v3.159c0 .538.214 1.055.595 1.436L15 17" />
+              </svg>
+            </span>
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Boletos em atraso</p>
+              <p class="text-3xl font-semibold text-slate-900">R$ {{ valor_em_atraso|currency_br }}</p>
+              <p class="text-xs font-medium text-slate-500">{{ total_em_atraso|intcomma }} boleto(s)</p>
+            </div>
           </div>
         </div>
-      </div>
+      </a>
 
-      <div class="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-indigo-50 via-white to-white p-6 shadow-sm">
-        <div class="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-indigo-100/60"></div>
-        <div class="relative flex items-center gap-4">
-          <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500 text-white shadow-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 1.343-3 3v1a3 3 0 006 0v-1c0-1.657-1.343-3-3-3z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 20h12a2 2 0 002-2v-4a6 6 0 10-12 0v4a2 2 0 002 2z" />
-            </svg>
-          </span>
-          <div>
-            <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Boletos a receber</p>
-            <p class="text-3xl font-semibold text-slate-900">R$ {{ valor_a_receber|currency_br }}</p>
-            <p class="text-xs font-medium text-slate-500">{{ total_a_receber|intcomma }} boleto(s)</p>
+      <a href="{% url 'boletos_list' %}?status=emitido{% for mes in meses_selecionados %}&mes={{ mes }}{% endfor %}{% for ano in anos_selecionados %}&ano={{ ano }}{% endfor %}{% for dia in dias_selecionados %}&dia={{ dia }}{% endfor %}" class="block rounded-3xl transition duration-150 ease-in-out hover:scale-[1.02] hover:shadow-xl focus:scale-[1.02] focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2">
+        <div class="relative h-full overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-indigo-50 via-white to-white p-6 shadow-sm">
+          <div class="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-indigo-100/60"></div>
+          <div class="relative flex items-center gap-4">
+            <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500 text-white shadow-lg">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 1.343-3 3v1a3 3 0 006 0v-1c0-1.657-1.343-3-3-3z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 20h12a2 2 0 002-2v-4a6 6 0 10-12 0v4a2 2 0 002 2z" />
+              </svg>
+            </span>
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Boletos a receber</p>
+              <p class="text-3xl font-semibold text-slate-900">R$ {{ valor_a_receber|currency_br }}</p>
+              <p class="text-xs font-medium text-slate-500">{{ total_a_receber|intcomma }} boleto(s)</p>
+            </div>
           </div>
         </div>
-      </div>
+      </a>
     </div>
 
     <div class="rounded-3xl border border-slate-200 bg-white/70 p-6 shadow-sm">
