@@ -10,49 +10,52 @@
 
     <form class="space-y-6" method="post">
       {% csrf_token %}
-      <div class="filter-panel p-6 space-y-4">
-        <div class="grid gap-5 md:grid-cols-3">
-          <div>
+      <div class="filter-panel p-4 space-y-3 sm:p-5">
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-50">Filtro</p>
+        </div>
+        <div class="grid gap-3 md:grid-cols-6 md:items-end">
+          <div class="md:max-w-[140px]">
             <label class="block text-sm font-semibold">{{ form.ano.label }}</label>
             {{ form.ano }}
             {% if form.ano.errors %}
               <p class="mt-1 text-xs font-medium text-rose-200">{{ form.ano.errors|striptags }}</p>
             {% endif %}
           </div>
-          <div>
+          <div class="md:max-w-[170px] flex flex-col justify-end">
             <label class="block text-sm font-semibold">{{ form.mes.label }}</label>
             {{ form.mes }}
             {% if form.mes.errors %}
               <p class="mt-1 text-xs font-medium text-rose-200">{{ form.mes.errors|striptags }}</p>
             {% endif %}
           </div>
-          <div>
-            <label class="block text-sm font-semibold">{{ form.nome.label }}</label>
+          <div class="md:col-span-2">
+            <label class="block text-sm font-semibold">Nome</label>
             {{ form.nome }}
             {% if form.nome.errors %}
               <p class="mt-1 text-xs font-medium text-rose-200">{{ form.nome.errors|striptags }}</p>
             {% endif %}
           </div>
-          <div class="md:col-span-3">
-            <label class="block text-sm font-semibold">{{ form.dia.label }}</label>
-            <div class="mt-2 flex flex-wrap items-center gap-3">
-              {{ form.dia }}
-              <button
-                type="submit"
-                formmethod="get"
-                class="inline-flex items-center justify-center rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-[#0b0626] shadow-lg shadow-indigo-900/30 ring-1 ring-white/30 transition hover:translate-y-[-1px]"
-              >
-                Filtrar
-              </button>
-            </div>
+          <div>
+            <label class="block text-sm font-semibold">Dia do vencimento</label>
+            {{ form.dia }}
             {% if form.dia.errors %}
               <p class="mt-1 text-xs font-medium text-rose-200">{{ form.dia.errors|striptags }}</p>
             {% endif %}
-            <p class="mt-1 text-[11px] font-medium text-indigo-100/80">
-              Selecione um dia para listar apenas os clientes com esse vencimento.
-            </p>
+          </div>
+          <div class="flex items-end justify-start md:justify-end">
+            <button
+              type="submit"
+              formmethod="get"
+              class="inline-flex items-center justify-center rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-[#0b0626] shadow-lg shadow-indigo-900/30 ring-1 ring-white/30 transition hover:translate-y-[-1px]"
+            >
+              Filtrar
+            </button>
           </div>
         </div>
+        <p class="text-[11px] font-medium text-indigo-100/80">
+          Selecione um dia para listar apenas os clientes com esse vencimento.
+        </p>
       </div>
 
       <fieldset class="space-y-4">
@@ -124,5 +127,65 @@
         </button>
       </div>
     </form>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        var now = new Date();
+        var currentYear = now.getFullYear().toString();
+        var currentMonth = (now.getMonth() + 1).toString();
+
+        var diaSelect = document.querySelector('select[name="dia"]');
+        var baseClass = diaSelect ? diaSelect.className : '';
+
+        function buildSelect(name, options) {
+          var seed = document.querySelector('input[name="' + name + '"]') || document.querySelector('select[name="' + name + '"]');
+          if (!seed) return;
+
+          var select = document.createElement('select');
+          select.name = name;
+          select.id = seed.id || name;
+          select.className = baseClass || seed.className || '';
+
+          var currentValue = (seed.value || '').trim();
+          options.forEach(function (opt) {
+            var option = document.createElement('option');
+            option.value = opt.value;
+            option.text = opt.label;
+            if (currentValue && currentValue === opt.value) {
+              option.selected = true;
+            }
+            select.appendChild(option);
+          });
+
+          if (!currentValue) {
+            if (name === 'ano') select.value = currentYear;
+            if (name === 'mes') select.value = currentMonth;
+          }
+
+          seed.replaceWith(select);
+        }
+
+        var years = [{ value: '', label: 'Todos' }];
+        for (var y = parseInt(currentYear, 10) - 2; y <= parseInt(currentYear, 10) + 2; y++) {
+          years.push({ value: y.toString(), label: y.toString() });
+        }
+        buildSelect('ano', years);
+
+        var months = [{ value: '', label: 'Todos' }];
+        for (var m = 1; m <= 12; m++) {
+          months.push({ value: m.toString(), label: m.toString() });
+        }
+        buildSelect('mes', months);
+
+        if (diaSelect && diaSelect.options.length) {
+          var first = diaSelect.options[0];
+          if (first.text.trim().toLowerCase().includes('vencimento')) {
+            first.text = 'Todos';
+            first.value = '';
+          }
+        }
+      });
+    </script>
+
   </div>
 {% endblock %}

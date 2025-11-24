@@ -3,37 +3,66 @@
 {% block content %}
   <div class="space-y-6">
     <div class="space-y-1">
-      <h2 class="text-2xl font-semibold text-slate-900">Conciliação de recebimentos</h2>
+      <h2 class="page-title text-2xl font-semibold">Conciliacao de recebimentos</h2>
       <p class="page-subtitle text-sm">
         Importe o extrato CSV dos recebimentos via PIX para visualizar e conciliar os lançamentos.
       </p>
     </div>
 
-    <form method="post" enctype="multipart/form-data" class="space-y-4 rounded-2xl border border-slate-200 bg-white/70 p-5 shadow-sm">
+    <form method="post" enctype="multipart/form-data" class="filter-panel space-y-3 p-4 sm:p-5">
       {% csrf_token %}
       {% if upload_form.non_field_errors %}
         <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {{ upload_form.non_field_errors }}
         </div>
       {% endif %}
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-6">
+      <div class="flex items-center justify-between gap-4 flex-col sm:flex-row sm:items-end">
         <div class="flex-1">
-          <label class="text-sm font-semibold text-slate-700" for="{{ upload_form.arquivo.id_for_label }}">Arquivo CSV</label>
-          {{ upload_form.arquivo }}
+          <label class="block text-sm font-semibold text-slate-100" for="{{ upload_form.arquivo.id_for_label }}">Arquivo CSV</label>
+          <div class="mt-2 flex flex-col gap-2">
+            <input type="file" name="{{ upload_form.arquivo.name }}" id="upload-arquivo" accept=".csv" class="hidden">
+            <div class="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                id="trigger-upload"
+                class="inline-flex items-center justify-center rounded-full bg-white/80 px-4 py-2 text-sm font-semibold text-[#0b0626] shadow-lg shadow-black/10 transition hover:translate-y-[-1px]"
+              >
+                Escolher CSV
+              </button>
+              <span id="upload-filename" class="text-sm text-slate-200">Nenhum arquivo escolhido</span>
+            </div>
+          </div>
           {% if upload_form.arquivo.errors %}
             <p class="mt-1 text-xs text-rose-600">{{ upload_form.arquivo.errors|striptags }}</p>
           {% else %}
-            <p class="mt-1 text-xs text-slate-500">Envie o arquivo .csv exatamente como exportado pelo banco.</p>
+            <p class="mt-1 text-xs text-slate-300">Envie o arquivo .csv exatamente como exportado pelo banco.</p>
           {% endif %}
         </div>
         <button
           type="submit"
-          class="inline-flex items-center justify-center rounded-full bg-brand-600 px-6 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+          class="inline-flex items-center justify-center rounded-full bg-brand-600 px-6 py-2 text-sm font-semibold text-[#0b0626] shadow-lg shadow-indigo-900/30 ring-1 ring-white/30 transition hover:translate-y-[-1px]"
         >
           Importar extrato
         </button>
       </div>
     </form>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        var input = document.getElementById("upload-arquivo");
+        var trigger = document.getElementById("trigger-upload");
+        var filename = document.getElementById("upload-filename");
+        if (!input || !trigger || !filename) return;
+        input.setAttribute("accept", ".csv");
+        trigger.addEventListener("click", function () {
+          input.click();
+        });
+        input.addEventListener("change", function () {
+          var name = input.files && input.files.length ? input.files[0].name : "Nenhum arquivo escolhido";
+          filename.textContent = name;
+        });
+      });
+    </script>
 
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="flex flex-wrap gap-2">

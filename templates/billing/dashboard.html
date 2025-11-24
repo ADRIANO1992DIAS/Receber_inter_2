@@ -5,12 +5,15 @@
     <div class="flex flex-col gap-2">
       <h2 class="page-title text-3xl font-semibold">Painel financeiro</h2>
       <p class="page-subtitle text-sm">
-        Acompanhe rapidamente os boletos gerados, recebidos e cancelados. Use os filtros para focar em um período específico.
+        Acompanhe rapidamente os boletos gerados, recebidos e cancelados. Use os filtros para focar em um periodo especifico.
       </p>
     </div>
 
-    <div class="rounded-3xl border border-slate-200 bg-white/70 p-5 shadow-sm backdrop-blur">
-      <form method="get">
+    <div class="filter-panel p-4 space-y-3 sm:p-5">
+      <form method="get" class="space-y-3">
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-50">Filtro</p>
+        </div>
         <div class="grid gap-4 md:grid-cols-3">
           <div class="flex flex-col gap-1">
             <label class="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center justify-between" for="filtro-dashboard-mes">
@@ -20,10 +23,6 @@
             <select
               id="filtro-dashboard-mes"
               name="mes"
-              multiple
-              class="h-12 rounded-2xl border border-slate-200 px-4 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-200 overflow-y-auto"
-              style="height: 48px;"
-              title="Use Ctrl (ou Cmd no Mac) para selecionar múltiplos valores."
             >
               {% for mes in meses %}
                 <option value="{{ mes.value }}"{% if mes.value in meses_selecionados %} selected{% endif %}>{{ mes.label }}</option>
@@ -38,10 +37,6 @@
             <select
               id="filtro-dashboard-ano"
               name="ano"
-              multiple
-              class="h-12 rounded-2xl border border-slate-200 px-4 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-200 overflow-y-auto"
-              style="height: 48px;"
-              title="Use Ctrl (ou Cmd no Mac) para selecionar múltiplos valores."
             >
               <option value=""{% if "" in anos_selecionados %} selected{% endif %}>Todos</option>
               {% for ano in anos %}
@@ -57,10 +52,6 @@
             <select
               id="filtro-dashboard-dia"
               name="dia"
-              multiple
-              class="h-12 rounded-2xl border border-slate-200 px-4 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-200 overflow-y-auto"
-              style="height: 48px;"
-              title="Use Ctrl (ou Cmd no Mac) para selecionar múltiplos valores."
             >
               {% for dia in dias %}
                 <option value="{{ dia.value }}"{% if dia.value in dias_selecionados %} selected{% endif %}>{{ dia.label }}</option>
@@ -68,8 +59,8 @@
             </select>
           </div>
         </div>
-        <p class="mt-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">Selecione múltiplos itens segurando Ctrl (ou Cmd no Mac).</p>
-        <div class="mt-4 flex flex-wrap gap-3">
+        <p class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Use os filtros para refinar a visao.</p>
+        <div class="flex flex-wrap gap-3">
           <button
             type="submit"
             class="inline-flex items-center justify-center rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
@@ -254,4 +245,3 @@
     </div>
   </div>
 {% endblock %}
-
