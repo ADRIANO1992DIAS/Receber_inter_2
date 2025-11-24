@@ -4,7 +4,7 @@
   <div class="space-y-6">
     <div class="space-y-1">
       <h2 class="text-2xl font-semibold text-slate-900">Conciliação de recebimentos</h2>
-      <p class="text-sm text-slate-500">
+      <p class="page-subtitle text-sm">
         Importe o extrato CSV dos recebimentos via PIX para visualizar e conciliar os lançamentos.
       </p>
     </div>
@@ -172,9 +172,9 @@
       </div>
     {% else %}
       {% if pendentes_only %}
-        <p class="text-sm text-slate-500">Nenhum lançamento pendente encontrado.</p>
+        <p class="page-subtitle text-sm">Nenhum lançamento pendente encontrado.</p>
       {% else %}
-        <p class="text-sm text-slate-500">Ainda não há lançamentos conciliados. Importe um extrato para iniciar.</p>
+        <p class="page-subtitle text-sm">Ainda não há lançamentos conciliados. Importe um extrato para iniciar.</p>
       {% endif %}
     {% endif %}
   </div>
