@@ -8,6 +8,7 @@
       </p>
     </div>
 
+    <div class="form-card">
     <form class="space-y-6" method="post" novalidate>
       {% csrf_token %}
       {% if form.non_field_errors %}
@@ -159,6 +160,7 @@
           Cancelar
         </a>
       </div>
-    </form>
+        </form>
+  </div>
   </div>
 {% endblock %}
