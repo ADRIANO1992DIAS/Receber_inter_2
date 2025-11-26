@@ -1,42 +1,35 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block content %}
   <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
     <div>
       <h2 class="page-title text-2xl font-semibold">Configuracao Banco Inter</h2>
-      <p class="page-subtitle text-sm">Atualize credenciais e anexe o certificado/chave usados pelo emissor de boletos.</p>
+      <p class="page-subtitle text-sm">Credenciais e anexos ficam salvos no banco de dados.</p>
     </div>
     <div class="rounded-full border border-brand-200 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-brand-700">
-      {{ env_path }}
+      Dados salvos no banco
     </div>
   </div>
 
-  <div class="grid gap-3 md:grid-cols-2">
-    <div class="rounded-3xl border border-slate-200 bg-white/80 p-5 shadow-sm">
-      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Local dos arquivos</p>
-      <p class="mt-2 text-lg font-semibold text-slate-900">{{ credentials_dir }}/</p>
-      <p class="mt-1 text-sm text-slate-600">Certificados enviados pela tela sao salvos nessa pasta.</p>
-    </div>
-    <div class="rounded-3xl border border-slate-200 bg-white/80 p-5 shadow-sm">
-      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Status dos anexos</p>
-      <div class="mt-3 flex flex-col gap-2 text-sm">
-        <div class="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2">
-          <div>
-            <p class="font-semibold text-slate-800">Certificado (.crt)</p>
-            <p class="text-xs text-slate-500">{{ cert_path }}</p>
-          </div>
-          <span class="rounded-full px-3 py-1 text-xs font-semibold {% if cert_exists %}bg-emerald-100 text-emerald-700{% else %}bg-rose-100 text-rose-700{% endif %}">
-            {% if cert_exists %}Encontrado{% else %}Nao encontrado{% endif %}
-          </span>
+  <div class="rounded-3xl border border-slate-200 bg-white/80 p-5 shadow-sm">
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Status dos anexos</p>
+    <div class="mt-3 flex flex-col gap-2 text-sm">
+      <div class="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2">
+        <div>
+          <p class="font-semibold text-slate-800">Certificado (.crt)</p>
+          <p class="text-xs text-slate-500">{{ cert_info.name|default:"Nenhum arquivo" }}</p>
         </div>
-        <div class="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2">
-          <div>
-            <p class="font-semibold text-slate-800">Chave (.key)</p>
-            <p class="text-xs text-slate-500">{{ key_path }}</p>
-          </div>
-          <span class="rounded-full px-3 py-1 text-xs font-semibold {% if key_exists %}bg-emerald-100 text-emerald-700{% else %}bg-rose-100 text-rose-700{% endif %}">
-            {% if key_exists %}Encontrada{% else %}Nao encontrada{% endif %}
-          </span>
+        <span class="rounded-full px-3 py-1 text-xs font-semibold {% if cert_info.exists %}bg-emerald-100 text-emerald-700{% else %}bg-rose-100 text-rose-700{% endif %}">
+          {% if cert_info.exists %}Encontrado{% else %}Nao encontrado{% endif %}
+        </span>
+      </div>
+      <div class="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2">
+        <div>
+          <p class="font-semibold text-slate-800">Chave (.key)</p>
+          <p class="text-xs text-slate-500">{{ key_info.name|default:"Nenhum arquivo" }}</p>
         </div>
+        <span class="rounded-full px-3 py-1 text-xs font-semibold {% if key_info.exists %}bg-emerald-100 text-emerald-700{% else %}bg-rose-100 text-rose-700{% endif %}">
+          {% if key_info.exists %}Encontrada{% else %}Nao encontrada{% endif %}
+        </span>
       </div>
     </div>
   </div>
@@ -86,15 +79,9 @@
 
       <div class="grid gap-4 lg:grid-cols-2">
         <div class="flex flex-col gap-2">
-          <label for="{{ form.cert_path.id_for_label }}" class="text-sm font-semibold text-slate-700">Caminho do certificado (.crt)</label>
-          {{ form.cert_path }}
-          <p class="text-xs text-slate-500">Se informar apenas o nome, o arquivo sera buscado em {{ credentials_dir }}/</p>
+          <label for="{{ form.cert_file.id_for_label }}" class="text-sm font-semibold text-slate-700">Certificado (.crt/.pem)</label>
           {{ form.cert_file }}
-          {% if form.cert_path.errors %}
-            <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-600">
-              {% for erro in form.cert_path.errors %}<p>{{ erro }}</p>{% endfor %}
-            </div>
-          {% endif %}
+          <p class="text-xs text-slate-500">Envie o arquivo do certificado para uso na emissao.</p>
           {% if form.cert_file.errors %}
             <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-600">
               {% for erro in form.cert_file.errors %}<p>{{ erro }}</p>{% endfor %}
@@ -102,15 +89,9 @@
           {% endif %}
         </div>
         <div class="flex flex-col gap-2">
-          <label for="{{ form.key_path.id_for_label }}" class="text-sm font-semibold text-slate-700">Caminho da chave (.key)</label>
-          {{ form.key_path }}
-          <p class="text-xs text-slate-500">O upload salva dentro de {{ credentials_dir }}/; caminhos absolutos tambem sao aceitos.</p>
+          <label for="{{ form.key_file.id_for_label }}" class="text-sm font-semibold text-slate-700">Chave privada (.key/.pem)</label>
           {{ form.key_file }}
-          {% if form.key_path.errors %}
-            <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-600">
-              {% for erro in form.key_path.errors %}<p>{{ erro }}</p>{% endfor %}
-            </div>
-          {% endif %}
+          <p class="text-xs text-slate-500">A chave tambem fica anexada e protegida pelo sistema.</p>
           {% if form.key_file.errors %}
             <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-600">
               {% for erro in form.key_file.errors %}<p>{{ erro }}</p>{% endfor %}

@@ -1,19 +1,15 @@
 import base64
-import os
 import unicodedata
 import datetime as dt
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
+from django.core.exceptions import ImproperlyConfigured
+
+from billing.models import InterConfig
 import requests
-from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-CREDENTIALS_DIR = BASE_DIR / "config" / "inter"
-ENV_PATH = CREDENTIALS_DIR / ".env"
-
-load_dotenv(ENV_PATH)
-
 AUTH_URL = "https://cdpj.partners.bancointer.com.br/oauth/v2/token"
 COBRANCA_URL = "https://cdpj.partners.bancointer.com.br/cobranca/v3/cobrancas"
 COBRANCA_CANCELAR_URL = "https://cdpj.partners.bancointer.com.br/cobranca/v3/cobrancas/{codigo_solicitacao}/cancelar"
@@ -26,15 +22,6 @@ def _tipo_pessoa(cpf_cnpj: str) -> str:
     digitos = "".join(ch for ch in cpf_cnpj if ch.isdigit())
     return "JURIDICA" if len(digitos) > 11 else "FISICA"
 
-
-def _resolve_cert_path(raw_value: Optional[str], filename: str) -> str:
-    if raw_value:
-        candidate = Path(raw_value)
-        if not candidate.is_absolute():
-            candidate = CREDENTIALS_DIR / candidate
-    else:
-        candidate = CREDENTIALS_DIR / filename
-    return str(candidate)
 
 
 def _montar_seu_numero(cliente_dict: Dict[str, Any], data_venc: dt.date) -> str:
@@ -61,15 +48,24 @@ def _truncate_text(value: Any, limit: int) -> str:
 
 class InterService:
     def __init__(self) -> None:
-        self.client_id = os.getenv("CLIENT_ID")
-        self.client_secret = os.getenv("CLIENT_SECRET")
-        self.conta_corrente = os.getenv("CONTA_CORRENTE")
-        self.cert_path = _resolve_cert_path(os.getenv("CERT_PATH"), "Inter_API_Certificado.crt")
-        self.key_path = _resolve_cert_path(os.getenv("KEY_PATH"), "Inter_API_Chave.key")
+        config = InterConfig.get_solo()
+
+        self.client_id = (config.client_id or "").strip()
+        self.client_secret = (config.client_secret or "").strip()
+        self.conta_corrente = (config.conta_corrente or "").strip()
+        self.cert_path = Path(config.cert_file.path) if config.cert_file else None
+        self.key_path = Path(config.key_file.path) if config.key_file else None
         self._token_cache: Dict[str, Dict[str, Any]] = {}
 
         if not all([self.client_id, self.client_secret, self.conta_corrente]):
-            raise RuntimeError("CLIENT_ID, CLIENT_SECRET e CONTA_CORRENTE precisam estar definidos no .env.")
+            raise ImproperlyConfigured("Configure CLIENT_ID, CLIENT_SECRET e CONTA_CORRENTE em Config. Inter.")
+        if not self.cert_path or not self.cert_path.exists():
+            raise ImproperlyConfigured("Certificado do Banco Inter nao encontrado. Reenvie o .crt/.pem em Config. Inter.")
+        if not self.key_path or not self.key_path.exists():
+            raise ImproperlyConfigured("Chave privada do Banco Inter nao encontrada. Reenvie o .key/.pem em Config. Inter.")
+
+        self.cert_path = str(self.cert_path)
+        self.key_path = str(self.key_path)
 
     def _obter_token(self, scope: str) -> str:
         agora = dt.datetime.utcnow()

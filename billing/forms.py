@@ -1,9 +1,8 @@
-from pathlib import Path
 from django import forms
 from django.db.models import QuerySet
 from django.utils import timezone
 
-from .models import Cliente, Boleto, ConciliacaoLancamento, WhatsappConfig
+from .models import Cliente, Boleto, ConciliacaoLancamento, WhatsappConfig, InterConfig
 
 
 def _coerce_int_or_none(value):
@@ -263,20 +262,24 @@ class WhatsappMensagemForm(forms.ModelForm):
         }
 
 
-class InterConfigForm(forms.Form):
-    DEFAULT_CERT_NAME = "Inter_API_Certificado.crt"
-    DEFAULT_KEY_NAME = "Inter_API_Chave.key"
-
-    client_id = forms.CharField(label="Client ID")
-    client_secret = forms.CharField(
-        label="Client Secret",
-        widget=forms.PasswordInput(render_value=True),
-    )
-    conta_corrente = forms.CharField(label="Conta corrente")
-    cert_path = forms.CharField(label="Nome do certificado (.crt)", required=False)
-    cert_file = forms.FileField(label="Upload do certificado", required=False)
-    key_path = forms.CharField(label="Nome da chave (.key)", required=False)
-    key_file = forms.FileField(label="Upload da chave privada", required=False)
+class InterConfigForm(forms.ModelForm):
+    class Meta:
+        model = InterConfig
+        fields = ["client_id", "client_secret", "conta_corrente", "cert_file", "key_file"]
+        labels = {
+            "client_id": "Client ID",
+            "client_secret": "Client Secret",
+            "conta_corrente": "Conta corrente",
+            "cert_file": "Certificado (.crt/.pem)",
+            "key_file": "Chave privada (.key/.pem)",
+        }
+        widgets = {
+            "client_id": forms.TextInput(),
+            "client_secret": forms.PasswordInput(render_value=True),
+            "conta_corrente": forms.TextInput(),
+            "cert_file": forms.ClearableFileInput(),
+            "key_file": forms.ClearableFileInput(),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -289,7 +292,7 @@ class InterConfigForm(forms.Form):
             "text-slate-700 shadow-sm file:mr-4 file:rounded-full file:border-0 file:bg-brand-600 "
             "file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-900 hover:file:brightness-110"
         )
-        for field_name in ("client_id", "client_secret", "conta_corrente", "cert_path", "key_path"):
+        for field_name in ("client_id", "client_secret", "conta_corrente"):
             self.fields[field_name].widget.attrs.update({"class": text_class})
         for field_name in ("cert_file", "key_file"):
             self.fields[field_name].widget.attrs.update({"class": file_class, "accept": ".crt,.pem,.key"})
@@ -309,22 +312,4 @@ class InterConfigForm(forms.Form):
             if not nome.endswith((".key", ".pem")):
                 raise forms.ValidationError("Envie uma chave com extensao .key ou .pem.")
         return arquivo
-
-    def clean_cert_path(self):
-        valor = (self.cleaned_data.get("cert_path") or "").strip()
-        if not valor:
-            return self.DEFAULT_CERT_NAME
-        caminho = Path(valor)
-        if caminho.is_absolute():
-            return str(caminho)
-        return caminho.name or self.DEFAULT_CERT_NAME
-
-    def clean_key_path(self):
-        valor = (self.cleaned_data.get("key_path") or "").strip()
-        if not valor:
-            return self.DEFAULT_KEY_NAME
-        caminho = Path(valor)
-        if caminho.is_absolute():
-            return str(caminho)
-        return caminho.name or self.DEFAULT_KEY_NAME
 

@@ -12,11 +12,17 @@ Aplicacao web para controlar clientes recorrentes, gerar boletos mensais e integ
 ## Stack e decisoes
 - Python 3.12 + Django 5.0 (ver `requirements.txt`).
 - SQLite persistido em `./data/db.sqlite3`; montamos como volume no Docker para manter historico.
-- `requests` + `python-dotenv` cuidam da autenticacao OAuth2 e carregamento do arquivo `.env`.
+- Credenciais do Inter agora ficam no banco (tela `/config/inter/`), com arquivos armazenados em `media/inter_credentials/`.
+- `requests` faz as chamadas HTTP; `python-dotenv` segue disponivel para utilitarios CLI em `inter_api/`.
 - `entrypoint.sh` aplica migracoes, coleta estaticos e cria o superusuario definido nas variaveis antes de subir o `runserver`.
 
-## Configuracao de credenciais (`config/inter/.env`)
-Crie a pasta `config/inter/` (se ainda nao existir) e adicione o arquivo `.env` usado tanto pelo Docker quanto pelo `python manage.py runserver`.
+## Credenciais do Banco Inter (app web)
+1) Acesse `/config/inter/` logado e preencha `Client ID`, `Client Secret`, `Conta corrente`.
+2) Anexe o certificado (.crt/.pem) e a chave (.key/.pem). Os arquivos ficam em `media/inter_credentials/` e nao sao versionados.
+3) O `InterService` usa apenas o que estiver salvo nessa tela (nao depende mais de variaveis no `.env`).
+
+## Credenciais para scripts CLI (opcional)
+Os scripts em `inter_api/` permitem testar emissao/baixa fora do Django. Para eles, use `config/inter/.env`:
 
 ```env
 CLIENT_ID=
@@ -30,7 +36,7 @@ DJANGO_SUPERUSER_EMAIL=
 DJANGO_SUPERUSER_PASSWORD=
 ```
 
-Os certificados e chaves podem ficar dentro de `config/inter/`. Quando `CERT_PATH` ou `KEY_PATH` nao forem absolutos, o `InterService` resolve automaticamente relativo a essa pasta.
+Coloque os arquivos `.crt` e `.key` em `config/inter/` ou informe caminhos absolutos.
 
 ## Executando com Docker Desktop
 ```bash
@@ -38,19 +44,19 @@ docker compose up --build -d
 # App:   http://localhost:8000
 # Admin: http://localhost:8000/admin/
 ```
-No primeiro start o `entrypoint` cria o superusuario definido no `.env`. Os volumes `./data`, `./media`, `./static` e `./staticfiles` permanecem sincronizados com o host para facilitar backup e inspecao.
+No primeiro start o `entrypoint` cria o superusuario definido no `.env`. Os volumes `./data`, `./media`, `./static` e `./staticfiles` permanecem sincronizados com o host para facilitar backup e inspecao. Depois de logar, acesse `/config/inter/` para cadastrar as credenciais do Banco Inter.
 
 ## Executando localmente (sem Docker)
 ```bash
 python -m venv venv
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\venv\Scripts\activate            # ou source .venv/bin/activate no Linux/macOS
+.env\Scriptsctivate            # ou source .venv/bin/activate no Linux/macOS
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py createsuperuser  # opcional se ja estiver configurado no .env
 python manage.py runserver
 ```
-O `python-dotenv` carrega `config/inter/.env` automaticamente, entao basta manter o arquivo no mesmo formato usado no Docker.
+Preencha as credenciais do Inter em `/config/inter/` apos acessar o app.
 
 ## Fluxo sugerido
 1. Acesse `/admin` e cadastre clientes ou utilize a tela simplificada em `/clientes`.
@@ -116,7 +122,3 @@ python manage.py test_whatsapp_connection 5599999999999 --mensagem "Teste de con
 ```
 
 Use um numero proprio para o teste (o comando apenas dispara a mensagem e imprime a resposta da API). Em caso de erro, verifique se as variaveis acima estao preenchidas.
-
-
-
-

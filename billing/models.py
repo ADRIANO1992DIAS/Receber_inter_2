@@ -137,6 +137,28 @@ class ConciliacaoAlias(models.Model):
         return f"{self.descricao_chave} -> {self.cliente.nome}"
 
 
+class InterConfig(models.Model):
+    client_id = models.CharField("Client ID", max_length=200, blank=True)
+    client_secret = models.CharField("Client Secret", max_length=300, blank=True)
+    conta_corrente = models.CharField("Conta corrente", max_length=50, blank=True)
+    cert_file = models.FileField(upload_to="inter_credentials/", blank=True, null=True)
+    key_file = models.FileField(upload_to="inter_credentials/", blank=True, null=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Configuracao do Inter"
+        verbose_name_plural = "Configuracoes do Inter"
+
+    def __str__(self):
+        return "Configuracao do Banco Inter"
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
 class WhatsappConfig(models.Model):
     saudacao_template = models.TextField(default=DEFAULT_WHATSAPP_SAUDACAO_TEMPLATE)
     atualizado_em = models.DateTimeField(auto_now=True)
