@@ -11,6 +11,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Optional, List, Set, Dict, Any, Tuple
 
+from dotenv import dotenv_values, load_dotenv
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import FileResponse, HttpResponse
@@ -36,8 +37,9 @@ from .forms import (
     ConciliacaoUploadForm,
     ConciliacaoLinkForm,
     WhatsappMensagemForm,
+    InterConfigForm,
 )
-from .services.inter_service import InterService
+from .services.inter_service import InterService, CREDENTIALS_DIR, ENV_PATH
 from .services.whatsapp_service import dispatch_boleto_via_whatsapp, format_whatsapp_phone
 
 
@@ -1768,6 +1770,116 @@ def cancelar_boleto(request, boleto_id: int):
             messages.success(request, "Cobran\u00e7a cancelada com sucesso no Inter.")
     return redirect("boletos_list")
 
+
+
+
+
+def _sanitizar_env_valor(valor: Optional[str]) -> str:
+    return str(valor or "").replace("\n", " ").replace("\r", " ").strip()
+
+
+def _carregar_config_inter_env() -> Dict[str, str]:
+    valores = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
+    return {
+        "client_id": _sanitizar_env_valor(valores.get("CLIENT_ID")),
+        "client_secret": _sanitizar_env_valor(valores.get("CLIENT_SECRET")),
+        "conta_corrente": _sanitizar_env_valor(valores.get("CONTA_CORRENTE")),
+        "cert_path": (_sanitizar_env_valor(valores.get("CERT_PATH") or InterConfigForm.DEFAULT_CERT_NAME)
+                      or InterConfigForm.DEFAULT_CERT_NAME),
+        "key_path": (_sanitizar_env_valor(valores.get("KEY_PATH") or InterConfigForm.DEFAULT_KEY_NAME)
+                     or InterConfigForm.DEFAULT_KEY_NAME),
+    }
+
+
+def _atualizar_env_inter(valores: Dict[str, str]) -> None:
+    ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
+    linhas_existentes = ENV_PATH.read_text(encoding="utf-8").splitlines() if ENV_PATH.exists() else []
+    novos = {chave: _sanitizar_env_valor(valor) for chave, valor in valores.items()}
+    atualizados: Set[str] = set()
+    novas_linhas: List[str] = []
+    for linha in linhas_existentes:
+        trecho = linha.strip()
+        if not trecho or trecho.startswith("#") or "=" not in linha:
+            novas_linhas.append(linha)
+            continue
+        chave, _ = linha.split("=", 1)
+        chave_limpa = chave.strip()
+        if chave_limpa in novos:
+            novas_linhas.append(f"{chave_limpa}={novos[chave_limpa]}")
+            atualizados.add(chave_limpa)
+        else:
+            novas_linhas.append(linha)
+    for chave, valor in novos.items():
+        if chave not in atualizados:
+            novas_linhas.append(f"{chave}={valor}")
+    conteudo = "\n".join(novas_linhas).rstrip() + "\n"
+    ENV_PATH.write_text(conteudo, encoding="utf-8")
+    load_dotenv(ENV_PATH, override=True)
+
+
+def _salvar_arquivo_credencial(upload, destino: Path) -> None:
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with destino.open("wb") as destino_fp:
+        for chunk in upload.chunks():
+            destino_fp.write(chunk)
+
+
+def _resolver_destino_credencial(valor: str) -> Path:
+    caminho = Path(valor or "")
+    if caminho.is_absolute():
+        return caminho
+    return CREDENTIALS_DIR / (caminho.name or caminho)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def config_inter(request):
+    valores_env = _carregar_config_inter_env()
+    form = InterConfigForm(request.POST or None, request.FILES or None, initial=valores_env)
+
+    cert_path_val = (form.data.get("cert_path") if form.is_bound else valores_env["cert_path"]) or InterConfigForm.DEFAULT_CERT_NAME
+    key_path_val = (form.data.get("key_path") if form.is_bound else valores_env["key_path"]) or InterConfigForm.DEFAULT_KEY_NAME
+
+    cert_arquivo = _resolver_destino_credencial(cert_path_val)
+    key_arquivo = _resolver_destino_credencial(key_path_val)
+
+    if request.method == "POST" and form.is_valid():
+        dados = form.cleaned_data
+        cert_path_val = dados.get("cert_path") or InterConfigForm.DEFAULT_CERT_NAME
+        key_path_val = dados.get("key_path") or InterConfigForm.DEFAULT_KEY_NAME
+
+        cert_destino = _resolver_destino_credencial(cert_path_val)
+        key_destino = _resolver_destino_credencial(key_path_val)
+
+        if dados.get("cert_file"):
+            _salvar_arquivo_credencial(dados["cert_file"], cert_destino)
+            cert_arquivo = cert_destino
+        if dados.get("key_file"):
+            _salvar_arquivo_credencial(dados["key_file"], key_destino)
+            key_arquivo = key_destino
+
+        _atualizar_env_inter(
+            {
+                "CLIENT_ID": dados.get("client_id"),
+                "CLIENT_SECRET": dados.get("client_secret"),
+                "CONTA_CORRENTE": dados.get("conta_corrente"),
+                "CERT_PATH": cert_path_val,
+                "KEY_PATH": key_path_val,
+            }
+        )
+        messages.success(request, "Configuracao do Banco Inter atualizada.")
+        return redirect("config_inter")
+
+    context = {
+        "form": form,
+        "env_path": ENV_PATH,
+        "credentials_dir": CREDENTIALS_DIR,
+        "cert_exists": cert_arquivo.exists(),
+        "key_exists": key_arquivo.exists(),
+        "cert_path": cert_path_val,
+        "key_path": key_path_val,
+    }
+    return render(request, "billing/inter_config.html", context)
 
 @login_required
 @require_http_methods(["GET", "POST"])
