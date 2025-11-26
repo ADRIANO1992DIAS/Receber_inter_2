@@ -14,6 +14,7 @@ from typing import Optional, List, Set, Dict, Any, Tuple
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import FileResponse, HttpResponse
+from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.db.models import Sum, Q
 from django.db.models.functions import Coalesce, ExtractDay
@@ -413,6 +414,24 @@ def _interpretar_status_cobranca(payload: Dict[str, Any]) -> Dict[str, Optional[
         "status": novo_status,
         "data_pagamento": data_pagamento,
     }
+
+
+def _get_inter_or_redirect(request, *, fallback: str = "boletos_list"):
+    """
+    Tenta inicializar o InterService e redireciona para a tela de configuracao
+    quando as credenciais/certificados nao estao prontos.
+    """
+    try:
+        return InterService()
+    except ImproperlyConfigured as exc:
+        messages.warning(
+            request,
+            f"Credenciais do Banco Inter nao configuradas: {exc}. Ajuste em Config. Inter.",
+        )
+        return redirect("config_inter")
+    except Exception as exc:  # noqa: BLE001
+        messages.error(request, f"Falha ao inicializar integracao com o Banco Inter: {exc}")
+        return redirect(fallback)
 
 
 def home(request):
@@ -1024,11 +1043,9 @@ def sincronizar_boletos(request):
         messages.info(request, "Nenhum boleto pendente para sincronizar.")
         return redirect("boletos_list")
 
-    try:
-        inter = InterService()
-    except Exception as exc:  # noqa: BLE001
-        messages.error(request, f"Falha ao inicializar integracao com o Banco Inter: {exc}")
-        return redirect("boletos_list")
+    inter = _get_inter_or_redirect(request, fallback="boletos_list")
+    if not isinstance(inter, InterService):
+        return inter
 
     atualizados = 0
     contagem: Dict[str, int] = {
@@ -1559,7 +1576,9 @@ def gerar_boletos(request):
         if not clientes:
             messages.info(request, "Nenhum cliente disponivel para o filtro selecionado.")
             return render(request, "billing/gerar_boletos.html", {"form": form})
-        inter = InterService()
+        inter = _get_inter_or_redirect(request, fallback="gerar_boletos")
+        if not isinstance(inter, InterService):
+            return inter
 
         with transaction.atomic():
             for cli in clientes:
@@ -1625,7 +1644,9 @@ def gerar_boletos(request):
 @login_required
 def baixar_pdf_view(request, boleto_id: int):
     boleto = get_object_or_404(Boleto, id=boleto_id)
-    inter = InterService()
+    inter = _get_inter_or_redirect(request, fallback="boletos_list")
+    if not isinstance(inter, InterService):
+        return inter
     pdf_bytes = _buscar_pdf_bytes(inter, boleto)
     if not pdf_bytes:
         messages.info(
@@ -1665,7 +1686,9 @@ def baixar_pdf_lote(request):
         messages.error(request, "Nenhum boleto encontrado para os identificadores informados.")
         return redirect("boletos_list")
 
-    inter = InterService()
+    inter = _get_inter_or_redirect(request, fallback="boletos_list")
+    if not isinstance(inter, InterService):
+        return inter
     buffer = io.BytesIO()
     erros: List[str] = []
     nomes_utilizados: Set[str] = set()
@@ -1746,7 +1769,9 @@ def _registrar_pagamento_manual(
 @login_required
 def cancelar_boleto(request, boleto_id: int):
     boleto = get_object_or_404(Boleto, id=boleto_id)
-    inter = InterService()
+    inter = _get_inter_or_redirect(request, fallback="boletos_list")
+    if not isinstance(inter, InterService):
+        return inter
     try:
         resultado = inter.cancelar_boleto(
             codigo_solicitacao=boleto.codigo_solicitacao or "",
