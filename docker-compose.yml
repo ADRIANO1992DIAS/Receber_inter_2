@@ -9,16 +9,57 @@ services:
     env_file:
       - ./config/inter/.env
     environment:
+      DB_HOST: db
+      DB_PORT: "5432"
       DJANGO_SETTINGS_MODULE: config.settings
     volumes:
-      - ./data:/app/data
+      - ./backup:/app/backup
       - ./media:/app/media
       - ./static:/app/static
       - ./staticfiles:/app/staticfiles
     restart: unless-stopped
+    depends_on:
+      - db
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  db:
+    image: postgres:15
+    container_name: recebere_inter_db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-receber_inter}
+      POSTGRES_USER: ${DB_USER:-receber_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-receber_pass}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-receber_user} -d ${DB_NAME:-receber_inter}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: recebere_inter_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-pgadmin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-pgadmin123}
+    depends_on:
+      - db
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  pgadmin_data:
