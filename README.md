@@ -1,4 +1,4 @@
-# Contas a Receber + Boletos (Banco Inter) - Django
+﻿# Contas a Receber + Boletos (Banco Inter) - Django
 
 Aplicacao web para controlar clientes recorrentes, gerar boletos mensais e integrar com a API do Banco Inter. Agora inclui isolamento por usuario, armazenamento criptografado das credenciais do Inter/WhatsApp e painel para configurar ambos.
 
@@ -101,3 +101,8 @@ docker compose up --build -d
 - Apagar banco existente se estiver migrando a partir de versao antiga; migrations foram squashed em `0001_initial`.
 - Certifique-se de reenvio dos certificados/chaves e credenciais apos recriar o banco.
 - Em Linux/macOS instale `libmagic` (no Docker ja vem). Em Windows, `python-magic-bin` e instalado pelo requirements.
+
+## HTTPS local (evita erros HTTPS no devserver)
+1. Rode com HTTPS direto (gera cert se faltar): python scripts/run_https_dev.py
+2. Ou manualmente: python scripts/generate_dev_cert.py e depois python manage.py runsslserver 0.0.0.0:8000 --certificate private/devcert.pem --key private/devkey.pem
+3. Acesse https://127.0.0.1:8000/ (ou https://localhost:8000/).

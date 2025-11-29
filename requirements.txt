@@ -14,3 +14,4 @@ pip-audit==2.7.3
 safety==3.2.6
 
 cryptography==43.0.1
+django-sslserver==0.22

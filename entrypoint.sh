@@ -1,5 +1,8 @@
 #!/bin/sh
 set -e
 
-# Dev-friendly entrypoint: run Django's built-in server directly
-python manage.py runserver 0.0.0.0:8000
+# Migrate DB on start (idempotente)
+python manage.py migrate --noinput
+
+# In production behind Nginx, use gunicorn
+exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3

@@ -1,8 +1,28 @@
-
+﻿
 import os
 from pathlib import Path
 from dotenv import load_dotenv
 from django.core.exceptions import ImproperlyConfigured
+import ssl
+
+# Compat: Python 3.13 remove ssl.wrap_socket; required for django-sslserver.
+if not hasattr(ssl, "wrap_socket"):
+    def _compat_wrap_socket(sock, keyfile=None, certfile=None, server_side=False, cert_reqs=ssl.CERT_NONE, ssl_version=ssl.PROTOCOL_TLS_SERVER, ca_certs=None, do_handshake_on_connect=True, suppress_ragged_eofs=True, ciphers=None):
+        ctx = ssl.SSLContext(ssl_version)
+        if ciphers:
+            ctx.set_ciphers(ciphers)
+        ctx.verify_mode = cert_reqs
+        if ca_certs:
+            ctx.load_verify_locations(ca_certs)
+        if certfile:
+            ctx.load_cert_chain(certfile, keyfile=keyfile)
+        return ctx.wrap_socket(
+            sock,
+            server_side=server_side,
+            do_handshake_on_connect=do_handshake_on_connect,
+            suppress_ragged_eofs=suppress_ragged_eofs,
+        )
+    ssl.wrap_socket = _compat_wrap_socket  # type: ignore[attr-defined]
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / "config" / "inter" / ".env")
@@ -41,6 +61,9 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "billing.apps.BillingConfig",
 ]
+
+if DEBUG:
+    INSTALLED_APPS.append("sslserver")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -150,3 +173,4 @@ if DEBUG:
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+
