@@ -1,0 +1,35 @@
+﻿/__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+
+.git
+.gitignore
+.DS_Store
+.idea/
+*.swp
+*.swo
+
+# Envs e ferramentas locais
+venv/
+.venv/
+
+# Configs e segredos locais
+config/inter/.env
+config/inter/*.crt
+config/inter/*.key
+config/inter/*.pem
+config/inter/*.cer
+config/inter/*.pfx
+config/inter/*.p12
+config/inter/*.jks
+
+# Dados e mídia (montar via volumes)
+media/
+private/
+backup/
+data/
+
+# Arquivos coletados/gerados
+staticfiles/
+node_modules/

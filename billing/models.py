@@ -1,7 +1,11 @@
-
+﻿from django.conf import settings
+from django.core.files.storage import FileSystemStorage
 from django.db import models
+from fernet_fields import EncryptedTextField
 
 from .constants import DEFAULT_WHATSAPP_SAUDACAO_TEMPLATE, LEGACY_WHATSAPP_SAUDACAO_TEMPLATES
+
+private_storage = FileSystemStorage(location=settings.PRIVATE_STORAGE_ROOT)
 
 UF_CHOICES = [
     ('AC','AC'),('AL','AL'),('AP','AP'),('AM','AM'),('BA','BA'),('CE','CE'),
@@ -11,7 +15,9 @@ UF_CHOICES = [
     ('SP','SP'),('SE','SE'),('TO','TO'),
 ]
 
+
 class Cliente(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="clientes", null=True, blank=True)
     valorNominal = models.DecimalField('Valor nominal', max_digits=12, decimal_places=2)
     dataVencimento = models.PositiveSmallIntegerField('Dia do vencimento (1..31)')
     nome = models.CharField('Nome', max_length=200)
@@ -20,13 +26,17 @@ class Cliente(models.Model):
     email = models.EmailField('E-mail', blank=True)
     ddd = models.CharField('DDD', max_length=3, blank=True)
     telefone = models.CharField('Telefone', max_length=20, blank=True)
-    endereco = models.CharField('Endereço', max_length=200, blank=True)
-    numero = models.CharField('Número', max_length=20, blank=True)
+    endereco = models.CharField('Endereco', max_length=200, blank=True)
+    numero = models.CharField('Numero', max_length=20, blank=True)
     complemento = models.CharField('Complemento', max_length=100, blank=True)
     bairro = models.CharField('Bairro', max_length=100, blank=True)
     cidade = models.CharField('Cidade', max_length=100, blank=True)
     uf = models.CharField('UF', max_length=2, choices=UF_CHOICES, blank=True)
     cep = models.CharField('CEP', max_length=9, blank=True)
+
+    class Meta:
+        ordering = ("nome",)
+        unique_together = ('owner', 'cpfCnpj')
 
     def __str__(self):
         return f"{self.nome} ({self.cpfCnpj})"
@@ -103,6 +113,13 @@ class ConciliacaoLancamento(models.Model):
     data = models.DateField()
     descricao = models.CharField(max_length=255)
     descricao_chave = models.CharField(max_length=255, blank=True, db_index=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="conciliacao_lancamentos",
+        null=True,
+        blank=True,
+    )
     valor = models.DecimalField(max_digits=12, decimal_places=2)
     boleto = models.ForeignKey(
         Boleto,
@@ -138,11 +155,13 @@ class ConciliacaoAlias(models.Model):
 
 
 class InterConfig(models.Model):
-    client_id = models.CharField("Client ID", max_length=200, blank=True)
-    client_secret = models.CharField("Client Secret", max_length=300, blank=True)
-    conta_corrente = models.CharField("Conta corrente", max_length=50, blank=True)
-    cert_file = models.FileField(upload_to="inter_credentials/", blank=True, null=True)
-    key_file = models.FileField(upload_to="inter_credentials/", blank=True, null=True)
+    client_id = EncryptedTextField("Client ID", blank=True)
+    client_secret = EncryptedTextField("Client Secret", blank=True)
+    conta_corrente = EncryptedTextField("Conta corrente", blank=True)
+    cert_file_name = models.CharField(max_length=255, blank=True)
+    key_file_name = models.CharField(max_length=255, blank=True)
+    cert_file_encrypted = models.BinaryField(blank=True, null=True)
+    key_file_encrypted = models.BinaryField(blank=True, null=True)
     atualizado_em = models.DateTimeField(auto_now=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 
@@ -159,8 +178,13 @@ class InterConfig(models.Model):
         return obj
 
 
+
 class WhatsappConfig(models.Model):
     saudacao_template = models.TextField(default=DEFAULT_WHATSAPP_SAUDACAO_TEMPLATE)
+    evolution_base_url = EncryptedTextField("Evolution Base URL", blank=True)
+    evolution_instance_id = EncryptedTextField("Evolution Instance ID", blank=True)
+    evolution_api_key = EncryptedTextField("Evolution API Key", blank=True)
+    whatsapp_pix_key = EncryptedTextField("Chave PIX WhatsApp", blank=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
     class Meta:

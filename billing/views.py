@@ -18,7 +18,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django.db.models import Sum, Q
 from django.db.models.functions import Coalesce, ExtractDay
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.files.base import ContentFile
 from django.views.decorators.http import require_POST, require_http_methods
 from django.utils import timezone
@@ -37,6 +37,7 @@ from .forms import (
     ClienteImportForm,
     ConciliacaoUploadForm,
     ConciliacaoLinkForm,
+    WhatsappConfigSecurityForm,
     WhatsappMensagemForm,
     InterConfigForm,
 )
@@ -94,6 +95,17 @@ CLIENTE_IMPORT_HEADER_ALIASES: Dict[str, str] = {
 CLIENTE_IMPORT_REQUIRED = {"nome", "cpfCnpj", "valorNominal", "dataVencimento"}
 DEFAULT_BOLETO_DDD = "85"
 DEFAULT_BOLETO_TELEFONE = "985134478"
+
+
+
+# Helpers para isolar dados por usuario
+
+def _cliente_queryset(user):
+    return Cliente.objects.filter(owner=user)
+
+
+def _boleto_queryset(user):
+    return Boleto.objects.select_related("cliente").filter(cliente__owner=user)
 
 
 def _normalizar_header(valor: Optional[str]) -> str:
@@ -441,7 +453,7 @@ def home(request):
 
 @login_required
 def clientes_list(request):
-    clientes_qs = Cliente.objects.all()
+    clientes_qs = _cliente_queryset(request.user)
 
     nome_param = request.GET.get("nome", "").strip()
     dia_param = request.GET.get("dia_vencimento", "").strip()
@@ -521,7 +533,7 @@ def clientes_list(request):
 
 @login_required
 def dashboard(request):
-    boletos_qs = Boleto.objects.select_related("cliente").all()
+    boletos_qs = _boleto_queryset(request.user)
 
     mes_params = [valor.strip() for valor in request.GET.getlist("mes")]
     ano_params = [valor.strip() for valor in request.GET.getlist("ano")]
@@ -645,7 +657,7 @@ def dashboard(request):
     valor_a_receber = boletos_a_receber.aggregate(total=Coalesce(Sum("valor"), Decimal("0")))["total"]
 
     anos_disponiveis = list(
-        Boleto.objects.order_by("-competencia_ano")
+        _boleto_queryset(request.user).order_by("-competencia_ano")
         .values_list("competencia_ano", flat=True)
         .distinct()
     )
@@ -654,7 +666,7 @@ def dashboard(request):
     anos_disponiveis = sorted({int(ano) for ano in anos_disponiveis}, reverse=True)
 
     dias_disponiveis = (
-        Boleto.objects.annotate(dia=ExtractDay("data_vencimento"))
+        _boleto_queryset(request.user).annotate(dia=ExtractDay("data_vencimento"))
         .values_list("dia", flat=True)
         .order_by("dia")
         .distinct()
@@ -745,7 +757,7 @@ def _normalizar_texto_para_match(texto: str) -> str:
     return " ".join(texto.lower().split())
 
 
-def _carregar_conciliacao_csv(arquivo) -> Tuple[List["ConciliacaoLancamento"], int]:
+def _carregar_conciliacao_csv(arquivo, owner) -> Tuple[List["ConciliacaoLancamento"], int]:
     bruto = arquivo.read()
     try:
         texto = bruto.decode("utf-8-sig")
@@ -791,17 +803,26 @@ def _carregar_conciliacao_csv(arquivo) -> Tuple[List["ConciliacaoLancamento"], i
             continue
 
         hash_identificador = _hash_conciliacao(data, descricao_txt, valor)
-        lancamento, created = ConciliacaoLancamento.objects.get_or_create(
+        lanc_qs = ConciliacaoLancamento.objects
+        if owner:
+            lanc_qs = lanc_qs.filter(owner=owner)
+        lancamento, created = lanc_qs.get_or_create(
             hash_identificador=hash_identificador,
             defaults={
                 "data": data,
                 "descricao": descricao_txt,
                 "descricao_chave": descricao_chave,
+                "owner": owner,
                 "valor": valor,
             },
         )
 
         campos_para_atualizar: List[str] = []
+        if lancamento.owner_id and owner and lancamento.owner_id != getattr(owner, "id", None):
+            continue
+        if not lancamento.owner_id and owner:
+            lancamento.owner = owner
+            campos_para_atualizar.append("owner")
         if not created:
             if lancamento.data != data:
                 lancamento.data = data
@@ -824,7 +845,7 @@ def _carregar_conciliacao_csv(arquivo) -> Tuple[List["ConciliacaoLancamento"], i
         if descricao_chave:
             alias_cliente = (
                 ConciliacaoAlias.objects.select_related("cliente")
-                .filter(descricao_chave=descricao_chave)
+                .filter(descricao_chave=descricao_chave, cliente__owner=owner)
                 .first()
             )
 
@@ -841,7 +862,7 @@ def _carregar_conciliacao_csv(arquivo) -> Tuple[List["ConciliacaoLancamento"], i
 
         if alias_cliente and not lancamento.boleto_id:
             boleto_auto = (
-                Boleto.objects.filter(
+                _boleto_queryset(owner).filter(
                     cliente=alias_cliente.cliente,
                     status__in=[Boleto.STATUS_EMITIDO, Boleto.STATUS_ATRASADO],
                     valor=lancamento.valor,
@@ -872,7 +893,7 @@ def conciliacao(request):
     if request.method == "POST":
         acao = request.POST.get("acao") or "upload"
         if acao == "apagar_pendentes":
-            removidos, _ = ConciliacaoLancamento.objects.filter(boleto__isnull=True).delete()
+            removidos, _ = ConciliacaoLancamento.objects.filter(boleto__isnull=True, owner=request.user).delete()
             if removidos:
                 messages.success(request, f"{removidos} lancamento(s) sem vinculo removido(s).")
             else:
@@ -882,7 +903,7 @@ def conciliacao(request):
                 redirect_url += "?pendentes=1"
             return redirect(redirect_url)
         if acao == "vincular":
-            link_form = ConciliacaoLinkForm(request.POST)
+            link_form = ConciliacaoLinkForm(request.POST, owner=request.user)
             if link_form.is_valid():
                 lancamento = link_form.cleaned_data["lancamento"]
                 boleto = link_form.cleaned_data["boleto"]
@@ -922,7 +943,7 @@ def conciliacao(request):
             if upload_form.is_valid():
                 arquivo = upload_form.cleaned_data["arquivo"]
                 try:
-                    registros_importados, auto_baixas = _carregar_conciliacao_csv(arquivo)
+                    registros_importados, auto_baixas = _carregar_conciliacao_csv(arquivo, request.user)
                 except ValueError as exc:
                     upload_form.add_error(None, str(exc))
                 else:
@@ -941,14 +962,17 @@ def conciliacao(request):
                     messages.error(request, erro)
 
     boletos_elegiveis = list(
-        Boleto.objects.filter(
+        _boleto_queryset(request.user).filter(
             status__in=[Boleto.STATUS_EMITIDO, Boleto.STATUS_ATRASADO]
         )
         .select_related("cliente")
         .order_by("cliente__nome", "competencia_ano", "competencia_mes")
     )
 
-    registros_queryset = ConciliacaoLancamento.objects.select_related("boleto", "boleto__cliente")
+    registros_queryset = (
+        ConciliacaoLancamento.objects.select_related("boleto", "boleto__cliente")
+        .filter(Q(boleto__cliente__owner=request.user) | Q(boleto__isnull=True, owner=request.user))
+    )
     if pendentes_only:
         registros_queryset = registros_queryset.filter(boleto__isnull=True)
     registros_queryset = registros_queryset.order_by("-data", "-id")[:200]
@@ -1009,7 +1033,7 @@ def conciliacao(request):
         )
     )
 
-    pendentes_total = ConciliacaoLancamento.objects.filter(boleto__isnull=True).count()
+    pendentes_total = ConciliacaoLancamento.objects.filter(boleto__isnull=True, owner=request.user).count()
 
     return render(
         request,
@@ -1027,10 +1051,11 @@ def conciliacao(request):
 
 
 @login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
 @require_POST
 def sincronizar_boletos(request):
     boletos = list(
-        Boleto.objects.filter(
+        _boleto_queryset(request.user).filter(
             status__in=[
                 Boleto.STATUS_EMITIDO,
                 Boleto.STATUS_NOVO,
@@ -1248,7 +1273,8 @@ def cliente_import(request):
                                 "cep": _texto_limpo(dados.get("cep")),
                             }
 
-                            cliente, criado = Cliente.objects.update_or_create(
+                            defaults["owner"] = request.user
+                            cliente, criado = _cliente_queryset(request.user).update_or_create(
                                 cpfCnpj=cpf,
                                 defaults=defaults,
                             )
@@ -1363,7 +1389,9 @@ def cliente_import_template(request):
 def cliente_create(request):
     form = ClienteForm(request.POST or None)
     if form.is_valid():
-        form.save()
+        cliente = form.save(commit=False)
+        cliente.owner = request.user
+        cliente.save()
         messages.success(request, "Cliente cadastrado com sucesso.")
         return redirect("clientes_list")
     return render(request, "billing/cliente_form.html", {"form": form, "titulo": "Novo cliente"})
@@ -1371,7 +1399,7 @@ def cliente_create(request):
 
 @login_required
 def cliente_update(request, cliente_id: int):
-    cliente = get_object_or_404(Cliente, id=cliente_id)
+    cliente = get_object_or_404(Cliente, id=cliente_id, owner=request.user)
     form = ClienteForm(request.POST or None, instance=cliente)
     if form.is_valid():
         form.save()
@@ -1382,7 +1410,7 @@ def cliente_update(request, cliente_id: int):
 
 @login_required
 def cliente_delete(request, cliente_id: int):
-    cliente = get_object_or_404(Cliente, id=cliente_id)
+    cliente = get_object_or_404(Cliente, id=cliente_id, owner=request.user)
     if request.method == "POST":
         cliente.delete()
         messages.success(request, "Cliente removido.")
@@ -1476,13 +1504,13 @@ def _aplicar_filtros_boletos(request, queryset, *, incluir_status=True):
         nome_selecionado = nome_param
 
     anos_disponiveis = list(
-        Boleto.objects.order_by("-competencia_ano")
+        _boleto_queryset(request.user).order_by("-competencia_ano")
         .values_list("competencia_ano", flat=True)
         .distinct()
     )
 
     dias_disponiveis = (
-        Boleto.objects.annotate(dia=ExtractDay("data_vencimento"))
+        _boleto_queryset(request.user).annotate(dia=ExtractDay("data_vencimento"))
         .values_list("dia", flat=True)
         .order_by("dia")
         .distinct()
@@ -1515,7 +1543,7 @@ def _aplicar_filtros_boletos(request, queryset, *, incluir_status=True):
 
 @login_required
 def boletos_list(request):
-    boletos_queryset = Boleto.objects.select_related("cliente")
+    boletos_queryset = _boleto_queryset(request.user)
     boletos_filtrados, contexto_filtros = _aplicar_filtros_boletos(request, boletos_queryset)
     boletos = boletos_filtrados.order_by("cliente__nome", "-criado_em")
 
@@ -1529,6 +1557,7 @@ def boletos_list(request):
 @login_required
 def boleto_create(request):
     form = BoletoForm(request.POST or None, request.FILES or None)
+    form.fields["cliente"].queryset = _cliente_queryset(request.user)
     if form.is_valid():
         boleto = form.save()
         messages.success(request, f"Boleto criado para {boleto.cliente.nome}.")
@@ -1538,8 +1567,9 @@ def boleto_create(request):
 
 @login_required
 def boleto_update(request, boleto_id: int):
-    boleto = get_object_or_404(Boleto, id=boleto_id)
+    boleto = get_object_or_404(Boleto, id=boleto_id, cliente__owner=request.user)
     form = BoletoForm(request.POST or None, request.FILES or None, instance=boleto)
+    form.fields["cliente"].queryset = _cliente_queryset(request.user)
     if form.is_valid():
         boleto = form.save()
         messages.success(request, f"Boleto atualizado para {boleto.cliente.nome}.")
@@ -1549,7 +1579,7 @@ def boleto_update(request, boleto_id: int):
 
 @login_required
 def boleto_delete(request, boleto_id: int):
-    boleto = get_object_or_404(Boleto, id=boleto_id)
+    boleto = get_object_or_404(Boleto, id=boleto_id, cliente__owner=request.user)
     if request.method == "POST":
         boleto.delete()
         messages.success(request, "Boleto removido.")
@@ -1558,12 +1588,13 @@ def boleto_delete(request, boleto_id: int):
 
 
 @login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def gerar_boletos(request):
     if request.method == "POST":
-        form = SelecionarClientesForm(request.POST)
+        form = SelecionarClientesForm(request.POST, owner=request.user)
     else:
         get_data = request.GET if request.GET else None
-        form = SelecionarClientesForm(get_data)
+        form = SelecionarClientesForm(get_data, owner=request.user)
     if request.method == "POST" and form.is_valid():
         ano = form.cleaned_data["ano"]
         mes = form.cleaned_data["mes"]
@@ -1643,7 +1674,7 @@ def gerar_boletos(request):
 
 @login_required
 def baixar_pdf_view(request, boleto_id: int):
-    boleto = get_object_or_404(Boleto, id=boleto_id)
+    boleto = get_object_or_404(Boleto, id=boleto_id, cliente__owner=request.user)
     inter = _get_inter_or_redirect(request, fallback="boletos_list")
     if not isinstance(inter, InterService):
         return inter
@@ -1681,7 +1712,7 @@ def baixar_pdf_lote(request):
         messages.info(request, "Selecione ao menos um boleto para baixar.")
         return redirect("boletos_list")
 
-    boletos = list(Boleto.objects.filter(id__in=ids).select_related("cliente"))
+    boletos = list(_boleto_queryset(request.user).filter(id__in=ids).select_related("cliente"))
     if not boletos:
         messages.error(request, "Nenhum boleto encontrado para os identificadores informados.")
         return redirect("boletos_list")
@@ -1735,7 +1766,7 @@ def baixar_pdf_lote(request):
 
 @login_required
 def marcar_pago(request, boleto_id: int):
-    boleto = get_object_or_404(Boleto, id=boleto_id)
+    boleto = get_object_or_404(Boleto, id=boleto_id, cliente__owner=request.user)
     _registrar_pagamento_manual(boleto, forma_pagamento="")
     messages.success(request, "Baixa registrada no sistema.")
     return redirect("boletos_list")
@@ -1743,7 +1774,7 @@ def marcar_pago(request, boleto_id: int):
 
 @login_required
 def marcar_pago_pix(request, boleto_id: int):
-    boleto = get_object_or_404(Boleto, id=boleto_id)
+    boleto = get_object_or_404(Boleto, id=boleto_id, cliente__owner=request.user)
     _registrar_pagamento_manual(boleto, forma_pagamento="pix")
     messages.success(request, "Baixa registrada via PIX.")
     return redirect("boletos_list")
@@ -1751,7 +1782,7 @@ def marcar_pago_pix(request, boleto_id: int):
 
 @login_required
 def marcar_pago_dinheiro(request, boleto_id: int):
-    boleto = get_object_or_404(Boleto, id=boleto_id)
+    boleto = get_object_or_404(Boleto, id=boleto_id, cliente__owner=request.user)
     _registrar_pagamento_manual(boleto, forma_pagamento="dinheiro")
     messages.success(request, "Baixa registrada como recebimento em dinheiro.")
     return redirect("boletos_list")
@@ -1767,8 +1798,9 @@ def _registrar_pagamento_manual(
 
 
 @login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def cancelar_boleto(request, boleto_id: int):
-    boleto = get_object_or_404(Boleto, id=boleto_id)
+    boleto = get_object_or_404(Boleto, id=boleto_id, cliente__owner=request.user)
     inter = _get_inter_or_redirect(request, fallback="boletos_list")
     if not isinstance(inter, InterService):
         return inter
@@ -1799,33 +1831,28 @@ def cancelar_boleto(request, boleto_id: int):
 
 
 
-def _file_info(arquivo) -> Dict[str, Any]:
-    if not arquivo:
-        return {"name": "", "path": "", "exists": False}
-    try:
-        caminho = Path(arquivo.path)
-    except (ValueError, OSError):
-        caminho = None
+def _file_info(nome: str, encrypted_blob) -> Dict[str, Any]:
     return {
-        "name": arquivo.name,
-        "path": str(caminho) if caminho else "",
-        "exists": caminho.exists() if caminho else False,
+        "name": nome or "",
+        "path": "",
+        "exists": bool(encrypted_blob),
     }
 
 
 @login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
 @require_http_methods(["GET", "POST"])
 def config_inter(request):
     config = InterConfig.get_solo()
     form = InterConfigForm(request.POST or None, request.FILES or None, instance=config)
 
-    cert_info = _file_info(config.cert_file)
-    key_info = _file_info(config.key_file)
+    cert_info = _file_info(config.cert_file_name, config.cert_file_encrypted)
+    key_info = _file_info(config.key_file_name, config.key_file_encrypted)
 
     if request.method == "POST" and form.is_valid():
         config = form.save()
-        cert_info = _file_info(config.cert_file)
-        key_info = _file_info(config.key_file)
+        cert_info = _file_info(config.cert_file_name, config.cert_file_encrypted)
+        key_info = _file_info(config.key_file_name, config.key_file_encrypted)
         messages.success(request, "Configuracao do Banco Inter atualizada.")
         return redirect("config_inter")
 
@@ -1843,13 +1870,14 @@ def config_inter(request):
 
 
 @login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
 @require_http_methods(["GET", "POST"])
 def enviar_boletos_whatsapp(request):
     config = WhatsappConfig.get_solo()
     mensagem_form = WhatsappMensagemForm(instance=config)
 
 
-    boletos_queryset = Boleto.objects.select_related("cliente")
+    boletos_queryset = _boleto_queryset(request.user)
     boletos_filtrados, contexto_filtros = _aplicar_filtros_boletos(
         request,
         boletos_queryset,
@@ -2058,3 +2086,17 @@ def enviar_boletos_whatsapp(request):
         "mensagem_config": config,
     }
     return render(request, "billing/enviar_boletos_whatsapp.html", context)
+
+
+
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
+@require_http_methods(["GET", "POST"])
+def config_whatsapp(request):
+    cfg = WhatsappConfig.get_solo()
+    form = WhatsappConfigSecurityForm(request.POST or None, instance=cfg)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Configuracao do WhatsApp atualizada.")
+        return redirect("config_whatsapp")
+    return render(request, "billing/whatsapp_config.html", {"form": form})

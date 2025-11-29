@@ -1,10 +1,29 @@
-﻿
-/config/inter/.env
-/config/inter/Inter_API_Certificado.crt
-/config/inter/Inter_API_Chave.key
-/Envia_boleto
+﻿/config/inter/.env
+/config/inter/*.crt
+/config/inter/*.key
+/config/inter/*.pem
+/config/inter/*.cer
+/config/inter/*.pfx
+/config/inter/*.p12
+/config/inter/*.jks
+/config/inter/*.pdf
+
+# Media and private data (never version PII or credentials)
+/media/
+/private/
+/backup/
+/data/
+
+# Virtualenv and cache
 venv/
 .venv/
 __pycache__/
-/data/
-/backup/
+
+# IDE/editor
+.DS_Store
+.idea/
+*.swp
+*.swo
+
+# Local scripts/binaries
+/Envia_boleto

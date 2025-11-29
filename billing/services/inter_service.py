@@ -1,13 +1,15 @@
-import base64
+﻿import base64
 import unicodedata
 import datetime as dt
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
+import requests
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
 from billing.models import InterConfig
-import requests
+from billing.utils.crypto import decrypt_bytes
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 AUTH_URL = "https://cdpj.partners.bancointer.com.br/oauth/v2/token"
@@ -23,7 +25,6 @@ def _tipo_pessoa(cpf_cnpj: str) -> str:
     return "JURIDICA" if len(digitos) > 11 else "FISICA"
 
 
-
 def _montar_seu_numero(cliente_dict: Dict[str, Any], data_venc: dt.date) -> str:
     fornecido = str(cliente_dict.get("seuNumero", "")).strip()
     if fornecido:
@@ -31,7 +32,7 @@ def _montar_seu_numero(cliente_dict: Dict[str, Any], data_venc: dt.date) -> str:
         return sanitizado[:15]
 
     cpf_cnpj = "".join(ch for ch in str(cliente_dict.get("cpfCnpj", "")) if ch.isalnum()) or "SN"
-    sufixo = data_venc.strftime("%y%m%d")  # garante diferença por competência/dia
+    sufixo = data_venc.strftime("%y%m%d")
     max_base = max(0, 15 - len(sufixo))
     base = cpf_cnpj[-max_base:] if max_base else ""
     resultado = (base + sufixo)[:15]
@@ -53,19 +54,23 @@ class InterService:
         self.client_id = (config.client_id or "").strip()
         self.client_secret = (config.client_secret or "").strip()
         self.conta_corrente = (config.conta_corrente or "").strip()
-        self.cert_path = Path(config.cert_file.path) if config.cert_file else None
-        self.key_path = Path(config.key_file.path) if config.key_file else None
         self._token_cache: Dict[str, Dict[str, Any]] = {}
 
         if not all([self.client_id, self.client_secret, self.conta_corrente]):
             raise ImproperlyConfigured("Configure CLIENT_ID, CLIENT_SECRET e CONTA_CORRENTE em Config. Inter.")
-        if not self.cert_path or not self.cert_path.exists():
-            raise ImproperlyConfigured("Certificado do Banco Inter nao encontrado. Reenvie o .crt/.pem em Config. Inter.")
-        if not self.key_path or not self.key_path.exists():
-            raise ImproperlyConfigured("Chave privada do Banco Inter nao encontrada. Reenvie o .key/.pem em Config. Inter.")
+        if not config.cert_file_encrypted or not config.key_file_encrypted:
+            raise ImproperlyConfigured("Envie o certificado (.crt/.pem) e a chave privada (.key/.pem) em Config. Inter.")
 
-        self.cert_path = str(self.cert_path)
-        self.key_path = str(self.key_path)
+        tmp_dir = Path(settings.PRIVATE_STORAGE_ROOT) / "tmp_inter"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        cert_name = config.cert_file_name or "Inter_API_Certificado.crt"
+        key_name = config.key_file_name or "Inter_API_Chave.key"
+        cert_path = tmp_dir / cert_name
+        key_path = tmp_dir / key_name
+        cert_path.write_bytes(decrypt_bytes(config.cert_file_encrypted))
+        key_path.write_bytes(decrypt_bytes(config.key_file_encrypted))
+        self.cert_path = str(cert_path)
+        self.key_path = str(key_path)
 
     def _obter_token(self, scope: str) -> str:
         agora = dt.datetime.utcnow()
@@ -132,15 +137,15 @@ class InterService:
         try:
             valor_nominal = float(cliente_dict["valorNominal"])
         except Exception as exc:  # noqa: BLE001
-            raise ValueError(f"Valor nominal inválido: {cliente_dict['valorNominal']}") from exc
+            raise ValueError(f"Valor nominal invalido: {cliente_dict['valorNominal']}") from exc
 
         cpf_cnpj = str(cliente_dict.get("cpfCnpj", "")).strip()
         if not cpf_cnpj:
-            raise ValueError("CPF/CNPJ é obrigatório para emissão do boleto.")
+            raise ValueError("CPF/CNPJ e obrigatorio para emissao do boleto.")
 
         nome = str(cliente_dict.get("nome", "")).strip()
         if not nome:
-            raise ValueError("Nome é obrigatório para emissão do boleto.")
+            raise ValueError("Nome e obrigatorio para emissao do boleto.")
 
         seu_numero = _montar_seu_numero(cliente_dict, data_venc)
 
@@ -161,7 +166,7 @@ class InterService:
                 "taxa": float(cliente_dict.get("taxaMora", 5)),
             },
             "mensagem": {
-                "linha1": str(cliente_dict.get("mensagem1", "Serviços contábeis.")),
+                "linha1": str(cliente_dict.get("mensagem1", "Servicos contabeis.")),
                 "linha2": str(cliente_dict.get("mensagem2", "")),
                 "linha3": str(cliente_dict.get("mensagem3", "")),
                 "linha4": str(cliente_dict.get("mensagem4", "")),
@@ -191,7 +196,7 @@ class InterService:
             retorno = response.json()
         except ValueError as exc:  # noqa: BLE001
             raise RuntimeError(
-                f"Falha ao interpretar resposta da emissão para {nome}."
+                "Falha ao interpretar resposta da emissao."
             ) from exc
 
         return {
@@ -281,12 +286,12 @@ class InterService:
         *,
         codigo_solicitacao: str = "",
         nosso_numero: str = "",
-        motivo: str = "Solicitação do cliente",
+        motivo: str = "Solicitacao do cliente",
     ) -> Dict[str, Any]:
         if not codigo_solicitacao and not nosso_numero:
             raise ValueError("Informe codigo_solicitacao ou nosso_numero para cancelar o boleto.")
 
-        motivo = (motivo or "Solicitação do cliente").strip() or "Solicitação do cliente"
+        motivo = (motivo or "Solicitacao do cliente").strip() or "Solicitacao do cliente"
         motivo_v3 = motivo[:50]
 
         token = self._obter_token("boleto-cobranca.write")
@@ -307,7 +312,6 @@ class InterService:
                 json={"motivoCancelamento": motivo_v3},
             )
             if response.ok:
-                payload: Dict[str, Any]
                 try:
                     payload = response.json()
                 except ValueError:
@@ -331,7 +335,6 @@ class InterService:
                 json={"motivoCancelamento": motivo_enum},
             )
             if response.ok:
-                payload: Dict[str, Any]
                 try:
                     payload = response.json()
                 except ValueError:
@@ -349,7 +352,7 @@ class InterService:
 
     @staticmethod
     def _normalizar_motivo_v2(motivo: str) -> str:
-        padrao = "Solicitação do cliente"
+        padrao = "Solicitacao do cliente"
         if not motivo:
             motivo = padrao
         texto = (

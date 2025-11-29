@@ -1,8 +1,81 @@
+﻿import mimetypes
+import os
+import shutil
+import subprocess
+import tempfile
+
+import magic
 from django import forms
 from django.db.models import QuerySet
 from django.utils import timezone
 
+from billing.utils.crypto import encrypt_bytes
 from .models import Cliente, Boleto, ConciliacaoLancamento, WhatsappConfig, InterConfig
+
+MAX_UPLOAD_SIZE = 5 * 1024 * 1024
+ALLOWED_MIME_PDF = {"application/pdf"}
+ALLOWED_MIME_CSV = {"text/csv", "text/plain", "application/vnd.ms-excel"}
+ALLOWED_MIME_XLSX = {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+ALLOWED_MIME_CERT = {
+    "application/x-x509-ca-cert",
+    "application/pkix-cert",
+    "application/pkcs8",
+    "application/x-pem-file",
+    "application/octet-stream",
+    "text/plain",
+}
+
+
+def _magic_mime(uploaded_file) -> str:
+    try:
+        head = uploaded_file.read(4096)
+        uploaded_file.seek(0)
+        if not head:
+            return ""
+        return magic.from_buffer(head, mime=True) or ""
+    except Exception:
+        uploaded_file.seek(0)
+        guessed, _ = mimetypes.guess_type(uploaded_file.name or "")
+        return guessed or ""
+
+
+def _clamd_scan(uploaded_file):
+    scanner = shutil.which("clamdscan")
+    if not scanner:
+        return
+    handle, temp_path = tempfile.mkstemp()
+    try:
+        with os.fdopen(handle, "wb") as tmp:
+            for chunk in uploaded_file.chunks() if hasattr(uploaded_file, "chunks") else [uploaded_file.read()]:
+                tmp.write(chunk)
+        uploaded_file.seek(0)
+        result = subprocess.run([scanner, "--no-summary", temp_path], capture_output=True, text=True)
+        if result.returncode not in (0, 1):
+            raise forms.ValidationError("Falha ao executar antivirus.")
+        if result.returncode == 1:
+            raise forms.ValidationError("Arquivo rejeitado pelo antivirus (clamdscan).")
+    finally:
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+        uploaded_file.seek(0)
+
+
+def _validate_upload(uploaded_file, *, allowed_mimes, field_label: str):
+    if not uploaded_file:
+        return uploaded_file
+    size = getattr(uploaded_file, "size", 0) or 0
+    if size > MAX_UPLOAD_SIZE:
+        raise forms.ValidationError(f"{field_label}: tamanho acima do limite de 5MB.")
+
+    mime_type = _magic_mime(uploaded_file).lower()
+    if mime_type and mime_type not in {m.lower() for m in allowed_mimes}:
+        raise forms.ValidationError(f"{field_label}: tipo de arquivo nao permitido ({mime_type}).")
+
+    _clamd_scan(uploaded_file)
+    uploaded_file.seek(0)
+    return uploaded_file
 
 
 def _coerce_int_or_none(value):
@@ -57,6 +130,7 @@ class SelecionarClientesForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
+        self.owner = kwargs.pop("owner", None)
         super().__init__(*args, **kwargs)
 
         if not self.is_bound:
@@ -68,6 +142,8 @@ class SelecionarClientesForm(forms.Form):
             self.fields["mes"].initial = self.initial.get("mes", self.fields["mes"].initial)
 
         clientes_qs = Cliente.objects.filter(ativo=True)
+        if self.owner:
+            clientes_qs = clientes_qs.filter(owner=self.owner)
 
         nome_raw = ""
         if self.is_bound:
@@ -193,9 +269,21 @@ class BoletoForm(forms.ModelForm):
             "valor": forms.NumberInput(attrs={"step": "0.01"}),
         }
 
+    def clean_pdf(self):
+        arquivo = self.cleaned_data.get("pdf")
+        return _validate_upload(arquivo, allowed_mimes=ALLOWED_MIME_PDF, field_label="PDF do boleto")
+
 
 class ClienteImportForm(forms.Form):
     arquivo = forms.FileField(label="Planilha Excel (.xlsx)")
+
+    def clean_arquivo(self):
+        arquivo = self.cleaned_data["arquivo"]
+        nome = (arquivo.name or "").lower()
+        if not nome.endswith(".xlsx"):
+            raise forms.ValidationError("Envie um arquivo com extensao .xlsx.")
+        _validate_upload(arquivo, allowed_mimes=ALLOWED_MIME_XLSX, field_label="Planilha")
+        return arquivo
 
 
 class ConciliacaoUploadForm(forms.Form):
@@ -214,7 +302,7 @@ class ConciliacaoUploadForm(forms.Form):
         nome = (arquivo.name or "").lower()
         if not nome.endswith(".csv"):
             raise forms.ValidationError("Envie um arquivo com extensao .csv.")
-        return arquivo
+        return _validate_upload(arquivo, allowed_mimes=ALLOWED_MIME_CSV, field_label="Extrato CSV")
 
 
 class ConciliacaoLinkForm(forms.Form):
@@ -222,18 +310,28 @@ class ConciliacaoLinkForm(forms.Form):
     lancamento_id = forms.IntegerField(widget=forms.HiddenInput())
     boleto_id = forms.IntegerField(required=True)
 
+    def __init__(self, *args, **kwargs):
+        self.owner = kwargs.pop("owner", None)
+        super().__init__(*args, **kwargs)
+
     def clean(self):
         cleaned = super().clean()
         lancamento_id = cleaned.get("lancamento_id")
         boleto_id = cleaned.get("boleto_id")
         if not lancamento_id or not boleto_id:
             raise forms.ValidationError("Informe o lancamento e o boleto a vincular.")
+        lanc_qs = ConciliacaoLancamento.objects
+        if self.owner:
+            lanc_qs = lanc_qs.filter(owner=self.owner)
         try:
-            lancamento = ConciliacaoLancamento.objects.get(pk=lancamento_id)
+            lancamento = lanc_qs.get(pk=lancamento_id)
         except ConciliacaoLancamento.DoesNotExist as exc:
             raise forms.ValidationError("Lancamento de conciliacao nao foi encontrado.") from exc
+        boleto_qs = Boleto.objects.select_related("cliente")
+        if self.owner:
+            boleto_qs = boleto_qs.filter(cliente__owner=self.owner)
         try:
-            boleto = Boleto.objects.get(pk=boleto_id)
+            boleto = boleto_qs.get(pk=boleto_id)
         except Boleto.DoesNotExist as exc:
             raise forms.ValidationError("Boleto selecionado nao existe mais.") from exc
         if boleto.status not in ("emitido", "atrasado"):
@@ -262,23 +360,57 @@ class WhatsappMensagemForm(forms.ModelForm):
         }
 
 
+
+class WhatsappConfigSecurityForm(forms.ModelForm):
+    class Meta:
+        model = WhatsappConfig
+        fields = ["evolution_base_url", "evolution_instance_id", "evolution_api_key", "whatsapp_pix_key"]
+        labels = {
+            "evolution_base_url": "Evolution Base URL",
+            "evolution_instance_id": "Evolution Instance ID",
+            "evolution_api_key": "Evolution API Key",
+            "whatsapp_pix_key": "Chave PIX",
+        }
+        widgets = {
+            "evolution_base_url": forms.URLInput(),
+            "evolution_instance_id": forms.TextInput(),
+            "evolution_api_key": forms.TextInput(),
+            "whatsapp_pix_key": forms.TextInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        text_class = (
+            "mt-1 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm "
+            "text-slate-700 shadow-sm focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-200"
+        )
+        for field_name in self.fields:
+            self.fields[field_name].widget.attrs.update({"class": text_class})
+        self.fields["evolution_api_key"].widget = forms.PasswordInput(render_value=True, attrs={"class": text_class})
+
+    def clean_evolution_base_url(self):
+        url = (self.cleaned_data.get("evolution_base_url") or "").strip()
+        if url and not url.startswith(("http://", "https://")):
+            raise forms.ValidationError("Informe uma URL valida (http/https).")
+        return url
+
+
 class InterConfigForm(forms.ModelForm):
+    cert_file = forms.FileField(required=False, label="Certificado (.crt/.pem)")
+    key_file = forms.FileField(required=False, label="Chave privada (.key/.pem)")
+
     class Meta:
         model = InterConfig
-        fields = ["client_id", "client_secret", "conta_corrente", "cert_file", "key_file"]
+        fields = ["client_id", "client_secret", "conta_corrente"]
         labels = {
             "client_id": "Client ID",
             "client_secret": "Client Secret",
             "conta_corrente": "Conta corrente",
-            "cert_file": "Certificado (.crt/.pem)",
-            "key_file": "Chave privada (.key/.pem)",
         }
         widgets = {
             "client_id": forms.TextInput(),
             "client_secret": forms.PasswordInput(render_value=True),
             "conta_corrente": forms.TextInput(),
-            "cert_file": forms.ClearableFileInput(),
-            "key_file": forms.ClearableFileInput(),
         }
 
     def __init__(self, *args, **kwargs):
@@ -295,21 +427,30 @@ class InterConfigForm(forms.ModelForm):
         for field_name in ("client_id", "client_secret", "conta_corrente"):
             self.fields[field_name].widget.attrs.update({"class": text_class})
         for field_name in ("cert_file", "key_file"):
-            self.fields[field_name].widget.attrs.update({"class": file_class, "accept": ".crt,.pem,.key"})
+            self.fields[field_name].widget.attrs.update({"class": file_class, "accept": ".crt,.pem,.key,.cer,.pfx,.p12"})
 
     def clean_cert_file(self):
         arquivo = self.cleaned_data.get("cert_file")
         if arquivo:
-            nome = (arquivo.name or "").lower()
-            if not nome.endswith((".crt", ".pem", ".cer")):
-                raise forms.ValidationError("Envie um certificado com extensao .crt, .cer ou .pem.")
+            _validate_upload(arquivo, allowed_mimes=ALLOWED_MIME_CERT, field_label="Certificado")
         return arquivo
 
     def clean_key_file(self):
         arquivo = self.cleaned_data.get("key_file")
         if arquivo:
-            nome = (arquivo.name or "").lower()
-            if not nome.endswith((".key", ".pem")):
-                raise forms.ValidationError("Envie uma chave com extensao .key ou .pem.")
+            _validate_upload(arquivo, allowed_mimes=ALLOWED_MIME_CERT, field_label="Chave privada")
         return arquivo
 
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        cert_upload = self.cleaned_data.get("cert_file")
+        key_upload = self.cleaned_data.get("key_file")
+        if cert_upload:
+            instance.cert_file_encrypted = encrypt_bytes(cert_upload.read())
+            instance.cert_file_name = cert_upload.name
+        if key_upload:
+            instance.key_file_encrypted = encrypt_bytes(key_upload.read())
+            instance.key_file_name = key_upload.name
+        if commit:
+            instance.save()
+        return instance

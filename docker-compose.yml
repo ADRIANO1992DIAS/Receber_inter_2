@@ -9,17 +9,17 @@ services:
     env_file:
       - ./config/inter/.env
     environment:
-      DB_HOST: db
-      DB_PORT: "5432"
       DJANGO_SETTINGS_MODULE: config.settings
     volumes:
       - ./backup:/app/backup
       - ./media:/app/media
+      - ./private:/app/private
       - ./static:/app/static
       - ./staticfiles:/app/staticfiles
     restart: unless-stopped
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
@@ -34,8 +34,8 @@ services:
       POSTGRES_DB: ${DB_NAME:-receber_inter}
       POSTGRES_USER: ${DB_USER:-receber_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-receber_pass}
-    ports:
-      - "5433:5432"
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -45,20 +45,5 @@ services:
       retries: 5
     restart: unless-stopped
 
-
-  pgadmin:
-    image: dpage/pgadmin4:8
-    container_name: recebere_inter_pgadmin
-    env_file:
-      - ./config/inter/.env
-    depends_on:
-      - db
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    restart: unless-stopped
-
 volumes:
   postgres_data:
-  pgadmin_data:

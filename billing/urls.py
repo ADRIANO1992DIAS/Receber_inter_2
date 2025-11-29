@@ -1,11 +1,11 @@
-
-from django.urls import path
+﻿from django.urls import path
 from . import views
 
 urlpatterns = [
     path("", views.home, name="home"),
     path("dashboard/", views.dashboard, name="dashboard"),
     path("config/inter/", views.config_inter, name="config_inter"),
+    path("config/whatsapp/", views.config_whatsapp, name="config_whatsapp"),
     path("conciliacao/", views.conciliacao, name="conciliacao"),
     path("clientes/", views.clientes_list, name="clientes_list"),
     path("clientes/importar/", views.cliente_import, name="cliente_import"),

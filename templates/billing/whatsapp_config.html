@@ -1,0 +1,24 @@
+﻿{% extends "base.html" %}
+{% block content %}
+<div class="max-w-3xl mx-auto p-6">
+  <h1 class="text-2xl font-semibold mb-4">Config. WhatsApp / Evolution API</h1>
+  <form method="post" class="space-y-4" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% for field in form %}
+      <div>
+        <label class="block text-sm font-medium text-slate-700">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}
+          <p class="text-xs text-slate-500">{{ field.help_text }}</p>
+        {% endif %}
+        {% for error in field.errors %}
+          <p class="text-sm text-red-600">{{ error }}</p>
+        {% endfor %}
+      </div>
+    {% endfor %}
+    <button type="submit" class="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-2 text-white font-semibold shadow hover:brightness-110">
+      Salvar
+    </button>
+  </form>
+</div>
+{% endblock %}

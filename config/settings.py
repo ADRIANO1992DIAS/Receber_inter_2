@@ -1,14 +1,31 @@
-
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / "config" / "inter" / ".env")
 
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
-DEBUG = os.getenv("DEBUG", "1") == "1"
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
+
+def env(name: str, default=None, required: bool = False):
+    value = os.getenv(name, default)
+    if required and (value is None or str(value).strip() == ""):
+        raise ImproperlyConfigured(f"Required environment variable missing: {name}")
+    return value
+
+
+SECRET_KEY = env("SECRET_KEY", required=True)
+DEBUG = str(env("DEBUG", "0")).lower() in {"1", "true", "yes"}
+
+_raw_hosts = env("ALLOWED_HOSTS", "")
+if not _raw_hosts:
+    raise ImproperlyConfigured("ALLOWED_HOSTS must be configured via environment variable.")
+ALLOWED_HOSTS = [host.strip() for host in _raw_hosts.split(",") if host.strip()]
+
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in env("CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()]
+FERNET_KEYS = [k.strip() for k in env("FERNET_KEYS", required=True).split(",") if k.strip()]
+if not FERNET_KEYS:
+    raise ImproperlyConfigured("FERNET_KEYS must be configured (comma-separated) for encryption.")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -52,11 +69,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-DB_NAME = os.getenv("DB_NAME", "receber_inter")
-DB_USER = os.getenv("DB_USER", "receber_user")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "receber_pass")
-DB_HOST = os.getenv("DB_HOST", "db")
-DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = env("DB_NAME", "receber_inter")
+DB_USER = env("DB_USER", "receber_user")
+DB_PASSWORD = env("DB_PASSWORD", "receber_pass")
+DB_HOST = env("DB_HOST", "db")
+DB_PORT = env("DB_PORT", "5432")
 
 DATABASES = {
     "default": {
@@ -69,7 +86,12 @@ DATABASES = {
     }
 }
 
-AUTH_PASSWORD_VALIDATORS = []
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 12}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
 LANGUAGE_CODE = "pt-br"
 TIME_ZONE = "America/Fortaleza"
@@ -80,10 +102,27 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
-MEDIA_URL = "/media/"
+MEDIA_URL = "/protected-media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_REDIRECT_URL = "/clientes/"
 LOGIN_URL = "login"
+
+# Security hardening
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_HSTS_SECONDS = 31536000
+SECURE_HSTS_PRELOAD = True
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "strict-origin"
+X_FRAME_OPTIONS = "DENY"
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_HTTPONLY = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024

@@ -1,7 +1,13 @@
-Django==5.0.6
+﻿Django==5.0.7
 gunicorn==22.0.0
 python-dotenv==1.0.1
 requests==2.32.3
 openpyxl==3.1.5
 PyPDF2==3.0.1
-psycopg2-binary==2.9.9
+psycopg[binary]==3.1.19
+python-magic==0.4.27
+bandit==1.7.9
+pip-audit==2.7.3
+safety==3.2.6
+django-fernet-fields==0.6
+cryptography==43.0.1
