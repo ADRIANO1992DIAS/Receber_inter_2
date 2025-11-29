@@ -1,10 +1,10 @@
-﻿# Contas a Receber + Boletos (Banco Inter) - Django
+# Contas a Receber + Boletos (Banco Inter) - Django
 
 Aplicacao web para controlar clientes recorrentes, gerar boletos mensais e integrar com a API do Banco Inter. Agora inclui isolamento por usuario, armazenamento criptografado das credenciais do Inter/WhatsApp e painel para configurar ambos.
 
 ## Stack
 - Python 3.12+ e Django 5.0.7
-- Postgres (psycopg3 binario)
+- Postgres (psycopg3 binario) por padrao; SQLite opcional para dev rapido (BANCO=0)
 - Gunicorn em producao
 - Credenciais criptografadas via Fernet (django-fernet-fields)
 
@@ -19,12 +19,21 @@ python -m venv venv
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\venv\Scripts\activate  # ou source venv/bin/activate
 pip install -r requirements.txt
+
+# Para rodar rapido com SQLite (gera db.sqlite3 no projeto)
+set BANCO=0         # Windows (ou export BANCO=0 no Linux/macOS)
+set SECRET_KEY=devsecret
+set FERNET_KEYS=devfernet
+set ALLOWED_HOSTS=localhost,127.0.0.1
 python manage.py migrate
+python manage.py runserver
 ```
+Remova BANCO=0 ou defina BANCO=1 para voltar ao Postgres (usa variaveis DB_*).
 
 ## Variaveis de ambiente (config/inter/.env)
 Exemplo:
 ```env
+BANCO=1  # 1=Postgres (padrao), 0=SQLite (usa db.sqlite3)
 FERNET_KEYS=CHAVE_FERNET_ATUAL
 SECRET_KEY=... # gere via os.urandom
 DEBUG=0
@@ -91,3 +100,4 @@ docker compose up --build -d
 ## Observacoes
 - Apagar banco existente se estiver migrando a partir de versao antiga; migrations foram squashed em `0001_initial`.
 - Certifique-se de reenvio dos certificados/chaves e credenciais apos recriar o banco.
+- Em Linux/macOS instale `libmagic` (no Docker ja vem). Em Windows, `python-magic-bin` e instalado pelo requirements.

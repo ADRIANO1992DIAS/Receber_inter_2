@@ -1,7 +1,7 @@
 ﻿from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
-import fernet_fields.fields
+from billing.fields import EncryptedTextField
 
 UF_CHOICES = [
     ('AC','AC'),('AL','AL'),('AP','AP'),('AM','AM'),('BA','BA'),('CE','CE'),
@@ -51,9 +51,9 @@ class Migration(migrations.Migration):
             name="InterConfig",
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("client_id", fernet_fields.fields.EncryptedTextField(blank=True, verbose_name="Client ID")),
-                ("client_secret", fernet_fields.fields.EncryptedTextField(blank=True, verbose_name="Client Secret")),
-                ("conta_corrente", fernet_fields.fields.EncryptedTextField(blank=True, verbose_name="Conta corrente")),
+                ("client_id", EncryptedTextField(blank=True, verbose_name="Client ID")),
+                ("client_secret", EncryptedTextField(blank=True, verbose_name="Client Secret")),
+                ("conta_corrente", EncryptedTextField(blank=True, verbose_name="Conta corrente")),
                 ("cert_file_name", models.CharField(blank=True, max_length=255)),
                 ("key_file_name", models.CharField(blank=True, max_length=255)),
                 ("cert_file_encrypted", models.BinaryField(blank=True, null=True)),
@@ -71,10 +71,10 @@ class Migration(migrations.Migration):
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("saudacao_template", models.TextField(default="{saudacao} {cliente}, segue o boleto com vencimento em {vencimento} no valor de R$ {valor}.")),
-                ("evolution_base_url", fernet_fields.fields.EncryptedTextField(blank=True, verbose_name="Evolution Base URL")),
-                ("evolution_instance_id", fernet_fields.fields.EncryptedTextField(blank=True, verbose_name="Evolution Instance ID")),
-                ("evolution_api_key", fernet_fields.fields.EncryptedTextField(blank=True, verbose_name="Evolution API Key")),
-                ("whatsapp_pix_key", fernet_fields.fields.EncryptedTextField(blank=True, verbose_name="Chave PIX WhatsApp")),
+                ("evolution_base_url", EncryptedTextField(blank=True, verbose_name="Evolution Base URL")),
+                ("evolution_instance_id", EncryptedTextField(blank=True, verbose_name="Evolution Instance ID")),
+                ("evolution_api_key", EncryptedTextField(blank=True, verbose_name="Evolution API Key")),
+                ("whatsapp_pix_key", EncryptedTextField(blank=True, verbose_name="Chave PIX WhatsApp")),
                 ("atualizado_em", models.DateTimeField(auto_now=True)),
             ],
             options={

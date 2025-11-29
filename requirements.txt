@@ -1,13 +1,16 @@
-﻿Django==5.0.7
+
+Django==5.0.7
 gunicorn==22.0.0
 python-dotenv==1.0.1
 requests==2.32.3
 openpyxl==3.1.5
 PyPDF2==3.0.1
-psycopg[binary]==3.1.19
-python-magic==0.4.27
+psycopg[binary]==3.1.19; platform_system != "Windows"
+psycopg[binary]==3.2.13; platform_system == "Windows"
+python-magic==0.4.27; platform_system != "Windows"
+python-magic-bin==0.4.14; platform_system == "Windows"
 bandit==1.7.9
 pip-audit==2.7.3
 safety==3.2.6
-django-fernet-fields==0.6
+
 cryptography==43.0.1

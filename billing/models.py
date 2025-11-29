@@ -1,7 +1,7 @@
 ﻿from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 from django.db import models
-from fernet_fields import EncryptedTextField
+from billing.fields import EncryptedTextField
 
 from .constants import DEFAULT_WHATSAPP_SAUDACAO_TEMPLATE, LEGACY_WHATSAPP_SAUDACAO_TEMPLATES
 

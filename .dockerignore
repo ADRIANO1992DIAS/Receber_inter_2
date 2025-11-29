@@ -15,7 +15,7 @@ venv/
 .venv/
 
 # Configs e segredos locais
-config/inter/.env
+
 config/inter/*.crt
 config/inter/*.key
 config/inter/*.pem

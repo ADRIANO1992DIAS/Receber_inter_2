@@ -1,9 +1,10 @@
-﻿import base64
+import base64
 import calendar
 import csv
 import hashlib
 import datetime as dt
 import io
+import os
 import unicodedata
 import zipfile
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -189,7 +190,7 @@ def _pdf_existe_localmente(boleto: Boleto) -> bool:
 
 def _preparar_boleto_para_reemissao(boleto: Boleto) -> None:
     """
-    Limpa dados sensÃ­veis de um boleto cancelado para permitir nova emissÃ£o.
+    Limpa dados sensíveis de um boleto cancelado para permitir nova emissão.
     """
     if boleto.pdf:
         try:
@@ -251,7 +252,7 @@ def _buscar_pdf_bytes(inter: InterService, boleto: Boleto) -> Optional[bytes]:
             with boleto.pdf.open("rb") as stream:
                 return stream.read()
         except FileNotFoundError:
-            # Arquivo foi removido do disco; forÃ§a re-download via API.
+            # Arquivo foi removido do disco; força re-download via API.
             pass
 
     identificadores = [
@@ -1204,13 +1205,13 @@ def cliente_import(request):
         except InvalidFileException:
             form.add_error("arquivo", "O arquivo deve estar em formato Excel (.xlsx).")
         except Exception as exc:
-            form.add_error("arquivo", f"NÃ£o foi possÃ­vel ler a planilha: {exc}")
+            form.add_error("arquivo", f"Não foi possível ler a planilha: {exc}")
         else:
             try:
                 sheet = workbook.active
                 header_row = next(sheet.iter_rows(max_row=1, values_only=True), None)
                 if not header_row:
-                    form.add_error("arquivo", "A planilha precisa ter uma linha de cabeÃ§alho.")
+                    form.add_error("arquivo", "A planilha precisa ter uma linha de cabeçalho.")
                 else:
                     header_map: Dict[str, int] = {}
                     for idx, header in enumerate(header_row):
@@ -1221,7 +1222,7 @@ def cliente_import(request):
                     campos_faltando = [campo for campo in CLIENTE_IMPORT_REQUIRED if campo not in header_map]
                     if campos_faltando:
                         cabecalhos = ", ".join(sorted(campos_faltando))
-                        form.add_error("arquivo", f"CabeÃ§alhos obrigatÃ³rios ausentes: {cabecalhos}.")
+                        form.add_error("arquivo", f"Cabeçalhos obrigatórios ausentes: {cabecalhos}.")
                     else:
                         criados = atualizados = 0
                         erros: List[str] = []
@@ -1247,10 +1248,10 @@ def cliente_import(request):
                             try:
                                 nome = _texto_limpo(dados.get("nome"))
                                 if not nome:
-                                    raise ValueError("Nome nÃ£o informado.")
+                                    raise ValueError("Nome não informado.")
                                 cpf = _apenas_digitos(_texto_limpo(dados.get("cpfCnpj")))
                                 if not cpf:
-                                    raise ValueError("CPF/CNPJ nÃ£o informado.")
+                                    raise ValueError("CPF/CNPJ não informado.")
                                 valor_nominal = _parse_decimal(dados.get("valorNominal"))
                                 dia_venc = _parse_dia_vencimento(dados.get("dataVencimento"))
                             except (ValueError, InvalidOperation) as exc:
@@ -1293,7 +1294,7 @@ def cliente_import(request):
                             resumo = ", ".join(mensagens)
                             messages.success(
                                 request,
-                                f"ImportaÃ§Ã£o concluÃ­da com sucesso: {resumo}.",
+                                f"Importação concluída com sucesso: {resumo}.",
                             )
                         else:
                             messages.info(
@@ -1360,7 +1361,7 @@ def cliente_import_template(request):
     )
     ws.append(
         [
-            "Cliente Pessoa FÃ­sica",
+            "Cliente Pessoa Física",
             "123.456.789-00",
             89.5,
             25,
@@ -1613,12 +1614,12 @@ def gerar_boletos(request):
 
         with transaction.atomic():
             for cli in clientes:
-                # Calcula data de vencimento (ajustando para ÃƒÂƒÃ†Â’ÃƒÂ†Ã¢Â€Â™ÃƒÂƒÃ¢Â€ÂšÃƒÂ‚Ã‚Âºltimo dia do mÃƒÂƒÃ†Â’ÃƒÂ†Ã¢Â€Â™ÃƒÂƒÃ¢Â€ÂšÃƒÂ‚Ã‚Âªs, se necessÃƒÂƒÃ†Â’ÃƒÂ†Ã¢Â€Â™ÃƒÂƒÃ¢Â€ÂšÃƒÂ‚Ã‚Â¡rio)
+                # Calcula data de vencimento (ajustando para ÃÆÃâÃâÃÂºltimo dia do mÃÆÃâÃâÃÂªs, se necessÃÆÃâÃâÃÂ¡rio)
                 last_day = calendar.monthrange(ano, mes)[1]
                 dia = min(cli.dataVencimento, last_day)
                 data_venc = dt.date(ano, mes, dia)
 
-                # Evita duplicidade da mesma competÃƒÂƒÃ†Â’ÃƒÂ†Ã¢Â€Â™ÃƒÂƒÃ¢Â€ÂšÃƒÂ‚Ã‚Âªncia
+                # Evita duplicidade da mesma competÃÆÃâÃâÃÂªncia
                 boleto, created = Boleto.objects.get_or_create(
                     cliente=cli, competencia_ano=ano, competencia_mes=mes,
                     defaults={
@@ -1632,10 +1633,10 @@ def gerar_boletos(request):
                         boleto.data_vencimento = data_venc
                         boleto.valor = cli.valorNominal
                     else:
-                        messages.info(request, f"Boleto jÃ¡ existia: {cli.nome} {mes:02d}/{ano}")
+                        messages.info(request, f"Boleto já existia: {cli.nome} {mes:02d}/{ano}")
                         continue
 
-                # Monta dict no formato esperado pelo serviÃƒÂƒÃ†Â’ÃƒÂ†Ã¢Â€Â™ÃƒÂƒÃ¢Â€ÂšÃƒÂ‚Ã‚Â§o (Banco Inter)
+                # Monta dict no formato esperado pelo serviÃÆÃâÃâÃÂ§o (Banco Inter)
                 cli_dict = {
                     "valorNominal": float(cli.valorNominal),
                     "nome": cli.nome,
@@ -1809,7 +1810,7 @@ def cancelar_boleto(request, boleto_id: int):
             codigo_solicitacao=boleto.codigo_solicitacao or "",
             nosso_numero=boleto.nosso_numero or "",
         )
-    except Exception as exc:  # noqa: BLE001 - queremos exibir o motivo ao usuÃƒÂƒÃ†Â’ÃƒÂ†Ã¢Â€Â™ÃƒÂƒÃ¢Â€ÂšÃƒÂ‚Ã‚Â¡rio
+    except Exception as exc:  # noqa: BLE001 - queremos exibir o motivo ao usuÃÆÃâÃâÃÂ¡rio
         boleto.erro_msg = str(exc)
         boleto.save(update_fields=["erro_msg"])
         messages.error(request, f"Falha ao cancelar via API: {exc}")
@@ -2094,7 +2095,25 @@ def enviar_boletos_whatsapp(request):
 @require_http_methods(["GET", "POST"])
 def config_whatsapp(request):
     cfg = WhatsappConfig.get_solo()
-    form = WhatsappConfigSecurityForm(request.POST or None, instance=cfg)
+
+    def _env_value(*names: str, default: str = "") -> str:
+        for name in names:
+            val = os.getenv(name)
+            if val not in (None, ""):
+                return val
+        return default
+
+    initial = {}
+    if not cfg.evolution_base_url:
+        initial["evolution_base_url"] = _env_value("EVOLUTION_BASE_URL", "EVOLUTION_API_URL", default="http://evolution-api:8080")
+    if not cfg.evolution_instance_id:
+        initial["evolution_instance_id"] = _env_value("EVOLUTION_INSTANCE_ID", "EVOLUTION_INSTANCE_NAME")
+    if not cfg.evolution_api_key:
+        initial["evolution_api_key"] = _env_value("EVOLUTION_API_KEY", "EVOLUTION_AUTHENTICATION_API_KEY", "AUTHENTICATION_API_KEY")
+    if not cfg.whatsapp_pix_key:
+        initial["whatsapp_pix_key"] = _env_value("WHATSAPP_PIX_KEY")
+
+    form = WhatsappConfigSecurityForm(request.POST or None, instance=cfg, initial=initial or None)
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Configuracao do WhatsApp atualizada.")
