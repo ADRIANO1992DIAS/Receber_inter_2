@@ -19,10 +19,14 @@ ALLOWED_MIME_XLSX = {"application/vnd.openxmlformats-officedocument.spreadsheetm
 ALLOWED_MIME_CERT = {
     "application/x-x509-ca-cert",
     "application/pkix-cert",
+    "application/pkcs12",
     "application/pkcs8",
+    "application/x-pkcs12",
     "application/x-pem-file",
+    "application/x-ssh-key",
     "application/octet-stream",
     "text/plain",
+    "text/x-ssh-private-key",
 }
 
 

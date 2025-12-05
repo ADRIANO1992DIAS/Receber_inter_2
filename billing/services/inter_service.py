@@ -12,6 +12,7 @@ from billing.models import InterConfig
 from billing.utils.crypto import decrypt_bytes
 
 BASE_DIR = Path(__file__).resolve().parents[2]
+DEFAULT_TIMEOUT = (5, 30)  # connect, read (seconds)
 AUTH_URL = "https://cdpj.partners.bancointer.com.br/oauth/v2/token"
 COBRANCA_URL = "https://cdpj.partners.bancointer.com.br/cobranca/v3/cobrancas"
 COBRANCA_CANCELAR_URL = "https://cdpj.partners.bancointer.com.br/cobranca/v3/cobrancas/{codigo_solicitacao}/cancelar"
@@ -54,6 +55,7 @@ class InterService:
         self.client_id = (config.client_id or "").strip()
         self.client_secret = (config.client_secret or "").strip()
         self.conta_corrente = (config.conta_corrente or "").strip()
+        self.timeout = DEFAULT_TIMEOUT
         self._token_cache: Dict[str, Dict[str, Any]] = {}
 
         if not all([self.client_id, self.client_secret, self.conta_corrente]):
@@ -93,6 +95,7 @@ class InterService:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             data=payload,
             cert=(self.cert_path, self.key_path),
+            timeout=self.timeout,
         )
         response.raise_for_status()
         data = response.json()
@@ -184,6 +187,7 @@ class InterService:
             },
             cert=(self.cert_path, self.key_path),
             json=body,
+            timeout=self.timeout,
         )
 
         if not response.ok:
@@ -222,6 +226,7 @@ class InterService:
                 "x-conta-corrente": self.conta_corrente,
             },
             cert=(self.cert_path, self.key_path),
+            timeout=self.timeout,
         )
 
         if response.status_code == 200:
@@ -266,6 +271,7 @@ class InterService:
             },
             params=params,
             cert=(self.cert_path, self.key_path),
+            timeout=self.timeout,
         )
 
         if response.status_code == 200:
@@ -310,6 +316,7 @@ class InterService:
                 headers=headers,
                 cert=(self.cert_path, self.key_path),
                 json={"motivoCancelamento": motivo_v3},
+                timeout=self.timeout,
             )
             if response.ok:
                 try:
@@ -333,6 +340,7 @@ class InterService:
                 headers=headers,
                 cert=(self.cert_path, self.key_path),
                 json={"motivoCancelamento": motivo_enum},
+                timeout=self.timeout,
             )
             if response.ok:
                 try:
