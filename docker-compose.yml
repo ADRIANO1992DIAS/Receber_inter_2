@@ -58,5 +58,57 @@
       retries: 5
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: recebere_inter_redis
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recebere_inter_worker
+    env_file:
+      - ./config/inter/.env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      DEBUG: "0"
+    command: ["celery", "-A", "config", "worker", "-l", "info"]
+    volumes:
+      - ./backup:/app/backup
+      - ./media:/app/media
+      - ./private:/app/private
+      - ./static:/app/static
+      - ./staticfiles:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recebere_inter_beat
+    env_file:
+      - ./config/inter/.env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+    command: ["celery", "-A", "config", "beat", "-l", "info"]
+    volumes:
+      - ./backup:/app/backup
+      - ./media:/app/media
+      - ./private:/app/private
+      - ./static:/app/static
+      - ./staticfiles:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   postgres_data:

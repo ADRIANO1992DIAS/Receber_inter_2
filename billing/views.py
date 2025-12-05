@@ -44,6 +44,7 @@ from .forms import (
 )
 from .services.inter_service import InterService
 from .services.whatsapp_service import dispatch_boleto_via_whatsapp, format_whatsapp_phone
+from .tasks import emitir_boleto_task
 
 
 MESES_CHOICES = [
@@ -1608,23 +1609,22 @@ def gerar_boletos(request):
         if not clientes:
             messages.info(request, "Nenhum cliente disponivel para o filtro selecionado.")
             return render(request, "billing/gerar_boletos.html", {"form": form})
+
         inter = _get_inter_or_redirect(request, fallback="gerar_boletos")
         if not isinstance(inter, InterService):
             return inter
 
+        enfileirados = 0
         for cli in clientes:
-            # Calcula data de vencimento (ajustando para ÃÆÃâÃâÃÂºltimo dia do mÃÆÃâÃâÃÂªs, se necessÃÆÃâÃâÃÂ¡rio)
             last_day = calendar.monthrange(ano, mes)[1]
             dia = min(cli.dataVencimento, last_day)
             data_venc = dt.date(ano, mes, dia)
 
-            # Evita duplicidade da mesma competÃÆÃâÃâÃÂªncia
             boleto, created = Boleto.objects.get_or_create(
-                cliente=cli, competencia_ano=ano, competencia_mes=mes,
-                defaults={
-                    "data_vencimento": data_venc,
-                    "valor": cli.valorNominal,
-                }
+                cliente=cli,
+                competencia_ano=ano,
+                competencia_mes=mes,
+                defaults={"data_vencimento": data_venc, "valor": cli.valorNominal},
             )
             if not created:
                 if boleto.status == Boleto.STATUS_CANCELADO:
@@ -1632,45 +1632,23 @@ def gerar_boletos(request):
                     boleto.data_vencimento = data_venc
                     boleto.valor = cli.valorNominal
                 else:
-                    messages.info(request, f"Boleto já existia: {cli.nome} {mes:02d}/{ano}")
+                    messages.info(request, f"Boleto ja existia: {cli.nome} {mes:02d}/{ano}")
                     continue
 
-            # Monta dict no formato esperado pelo serviÃÆÃâÃâÃÂ§o (Banco Inter)
-            cli_dict = {
-                "valorNominal": float(cli.valorNominal),
-                "nome": cli.nome,
-                "cpfCnpj": cli.cpfCnpj,
-                "email": cli.email,
-                "ddd": DEFAULT_BOLETO_DDD,
-                "telefone": DEFAULT_BOLETO_TELEFONE,
-                "endereco": cli.endereco,
-                "numero": cli.numero,
-                "complemento": cli.complemento,
-                "bairro": cli.bairro,
-                "cidade": cli.cidade,
-                "uf": cli.uf,
-                "cep": cli.cep,
-            }
-            try:
-                result = inter.emitir_boleto(cli_dict, data_venc)
-                boleto.nosso_numero = result.get("nossoNumero","")
-                boleto.linha_digitavel = result.get("linhaDigitavel","")
-                boleto.codigo_barras = result.get("codigoBarras","")
-                boleto.tx_id = result.get("txId","")
-                boleto.codigo_solicitacao = result.get("codigoSolicitacao","")
-                boleto.status = Boleto.STATUS_EMITIDO
-                boleto.save()
+            boleto.status = Boleto.STATUS_NOVO
+            boleto.erro_msg = ""
+            boleto.save()
+            emitir_boleto_task.delay(boleto.id)
+            enfileirados += 1
 
-            except Exception as e:
-                boleto.status = Boleto.STATUS_ERRO
-                boleto.erro_msg = str(e)
-                boleto.save()
-                messages.error(request, f"Erro ao emitir boleto de {cli.nome}: {e}")
-
-        messages.success(request, "Processo de emissao finalizado.")
+        if enfileirados:
+            messages.success(request, f"{enfileirados} boleto(s) enfileirado(s) para emissao.")
+        else:
+            messages.info(request, "Nenhum boleto foi enfileirado.")
         return redirect("boletos_list")
 
     return render(request, "billing/gerar_boletos.html", {"form": form})
+
 
 @login_required
 def baixar_pdf_view(request, boleto_id: int):
