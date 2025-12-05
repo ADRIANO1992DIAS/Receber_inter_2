@@ -6,6 +6,7 @@ Aplicacao web para controlar clientes recorrentes, gerar boletos mensais e integ
 - Python 3.12+ e Django 5.0.7
 - Postgres (psycopg3 binario) por padrao; SQLite opcional para dev rapido (BANCO=0)
 - Gunicorn em producao
+- Celery 5 + Redis para filas assincronas (emissao/baixa de boletos)
 - Credenciais criptografadas via Fernet (django-fernet-fields)
 
 ## Fluxo principal
@@ -40,6 +41,9 @@ DEBUG=0
 ALLOWED_HOSTS=localhost,127.0.0.1
 CSRF_TRUSTED_ORIGINS=https://localhost,https://127.0.0.1
 DJANGO_SETTINGS_MODULE=config.settings
+
+CELERY_BROKER_URL=redis://redis:6379/0           # opcional; default se usa docker compose
+CELERY_RESULT_BACKEND=redis://redis:6379/1       # opcional; default se usa docker compose
 
 DB_NAME=receber_inter
 DB_USER=receber_user
@@ -77,14 +81,22 @@ python -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).dec
 - Criar superuser em dev (so com DEBUG=1): `python manage.py create_superuser_dev`
 - Limpar midias sensiveis: `python manage.py clearmedia`
 - Envio WhatsApp: configure em `/config/whatsapp/` (staff) e use `/enviaboleto/`.
+- Worker Celery (dev): `celery -A config worker -l info` (necessita Redis em execucao)
 
 ## Docker
 ```bash
 docker compose up --build -d
 ```
+- Sobe web + nginx + postgres + redis + worker + beat
 - Web em `http://localhost:8000`
 - Volumes montados: `media/`, `private/`, `backup/`, `data/`, `static`, `staticfiles`
-- Gunicorn via entrypoint; migrations rodadas na subida
+- Gunicorn via entrypoint; migrations rodadas na subida; worker/beat usam mesmo container com comando Celery
+
+## Fila assincrona (Celery)
+- Emissao de boletos e enfileirada (`emitir_boleto_task`), evitando timeouts na requisicao.
+- Task para baixar/salvar PDF (`baixar_pdf_task`) com retries automaticos (backoff).
+- Em Docker o Redis ja sobe como broker/backend; em dev, suba Redis local ou ajuste `CELERY_BROKER_URL`.
+- Logs do worker: `docker compose logs -f worker` (ou `celery -A config worker -l info` em dev).
 
 ## Seguranca
 - Credenciais do Inter e Evolution armazenadas criptografadas em banco
